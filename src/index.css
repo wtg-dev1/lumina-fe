@@ -1,0 +1,58 @@
+/* Lumina Therapy Alliance — Global Styles */
+/* Colors extracted from Lumina_HL_Proposal_Document.docx */
+
+:root {
+  --teal-dark:  #1D6B6B;
+  --teal:       #2A7F7F;
+  --teal-mid:   #3D9E9E;
+  --teal-green: #1D9E75;
+  --cream:      #F5F0E8;
+  --text-dark:  #333333;
+  --text-mid:   #666666;
+  --white:      #FFFFFF;
+  --border:     #D5CFC4;
+  --bg-page:    #F9F6F1;
+  --amber:      #E6A817;
+  --orange:     #D4721A;
+  --red:        #C0392B;
+  --red-light:  #FCE8E8;
+  --amber-light:#FFF3E0;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-dark);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-page); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--teal-mid); }
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* Remove default button styles */
+button { font-family: Arial, sans-serif; }
+
+/* Tables */
+table { border-collapse: collapse; }
+
+/* Monospace */
+.mono { font-family: 'Courier New', Courier, monospace; }

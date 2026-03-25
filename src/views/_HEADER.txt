@@ -1,0 +1,17 @@
+/**
+ * LuminaOps.single.jsx
+ *
+ * The complete self-contained Lumina Ops UI prototype.
+ * All views are exported as named exports so they can be imported
+ * individually into OpsApp.jsx and the stub files.
+ *
+ * This file is intentionally kept as-is from the prototype phase.
+ * The developer should migrate each view to its own file and replace
+ * the in-browser storage (window.storage) with real API calls.
+ *
+ * Named exports provided at the bottom of this file:
+ *   DashboardView, ReferralsView, EmployersView, PracticesView,
+ *   ClientsView, SessionsView, AssessmentsView, AssessmentSendView,
+ *   BankingView, BillingView, PayoutsView, ROIView,
+ *   PracticePortalView, EmployerPortalView, AssessmentForm
+ */
