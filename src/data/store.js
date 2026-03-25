@@ -10,7 +10,7 @@
  */
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react'
-import { seed } from './seed'
+import { seed } from '../resources/seed'
 import { today, genAnonId, genToken } from '../utils/helpers'
 
 const STORE_KEY = 'lumina_ops_v12'
@@ -88,8 +88,9 @@ function reducer(state, action) {
       return { ...state, sessions: [...state.sessions, { id:`s${Date.now()}`, ...payload }] }
 
     // Assessments — send link (creates pending record)
+    // payload.token is optional — if provided by the component, use it directly
     case 'SEND_ASSESSMENT': {
-      const token = genToken(payload.clientId, payload.type)
+      const token = payload.token || genToken(payload.clientId, payload.type)
       const record = { id:`a_${Date.now()}`, clientId:payload.clientId, type:payload.type, date:today(), sentAt:today(), score:null, answers:null, completed:false, token }
       return { ...state, assessments:[...state.assessments, record], _lastToken: token }
     }
