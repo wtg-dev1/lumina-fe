@@ -1,6 +1,6 @@
 import React from 'react'
 import { C } from '../../utils/constants'
-import { PSYPACT_STATES } from '../../utils/helpers'
+import { PSYPACT_STATES } from '../../utils/constants'
 
 export const PsypactBadge = ({ state: clientState }) => {
   if (!clientState) return null
