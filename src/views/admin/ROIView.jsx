@@ -1,12 +1,30 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { C } from '../../utils/constants'
 import { fmt, phqSev, gadSev } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useCareStore, useOrgStore } from '../../data/stores'
 
 export default function ROIView() {
-  const { state: db } = useStore()
+  const org = useOrgStore()
+  const care = useCareStore()
+  const db = {
+    employers: org.employers,
+    practices: org.practices,
+    clients: care.clients,
+    sessions: care.sessions,
+    assessments: care.assessments,
+  }
 
   const [sel, setSel] = useState(db.employers[0]?.id)
+
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    care.ensureCoreLoaded()
+    care.ensureAssessmentsLoaded()
+  }, [org.ensureSummaryLoaded, care.ensureCoreLoaded, care.ensureAssessmentsLoaded])
+
+  useEffect(() => {
+    if (!sel && db.employers.length) setSel(db.employers[0].id)
+  }, [sel, db.employers])
 
   const emp = db.employers.find(e => e.id === sel)
   const ec  = db.clients.filter(c => c.employerId === sel)

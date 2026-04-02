@@ -15,22 +15,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { C } from '../utils/constants'
 import { Inp, Btn } from '../components/ui'
-
-// Demo role mapping (replace with real JWT auth)
-const DEMO_ROLES = {
-  'admin@luminatherapyalliance.com': 'admin',
-  'admin@wtgtherapy.com':            'p1',
-  'admin@manhattanwellness.com':     'p2',
-  'admin@wholeview.com':             'p3',
-  'admin@therapygroupphilly.com':    'p4',
-  'admin@therapyforwomen.com':       'p5',
-  'admin@abetterlifetherapy.com':    'p6',
-  'admin@therapygroupdc.com':        'p7',
-  'admin@sfstressandanxiety.com':    'p8',
-  'schen@meridiancap.com':           'e1',
-  'jholloway@vantagelaw.com':        'e2',
-  'druiz@northshore.com':            'e3',
-}
+import api, { setToken } from '../utils/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -44,22 +29,21 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    // TODO: Replace with real API call:
-    // const res = await api.auth.login(email, password)
-    // setToken(res.token)
-    // localStorage.setItem('lumina_role', res.role)
-    // navigate('/')
+    try {
+      const res = await api.auth.login(email, password)
+      const token = res?.token || res?.jwt || res?.data?.token
+      const role = res?.role || res?.userRole || res?.data?.role
 
-    // Demo auth
-    await new Promise(r => setTimeout(r, 600))
-    const role = DEMO_ROLES[email.toLowerCase()]
-    if (role) {
+      if (!token || !role) throw new Error('Login response missing token or role.')
+
+      setToken(token)
       localStorage.setItem('lumina_role', role)
-      navigate('/')
-    } else {
-      setError('Invalid credentials. Use one of the demo email addresses.')
+      navigate('/ops')
+    } catch (err) {
+      setError(err?.message || 'Login failed. Check credentials and try again.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -83,15 +67,12 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Btn onClick={handleLogin} disabled={loading||!email} style={{ width:'100%', marginTop:4 }}>
+          <Btn onClick={handleLogin} disabled={loading || !email || !password} style={{ width:'100%', marginTop:4 }}>
             {loading ? 'Signing in…' : 'Sign In'}
           </Btn>
 
           <div style={{ marginTop:16, fontSize:11, color:C.textMid, lineHeight:1.7 }}>
-            <strong>Demo logins:</strong><br/>
-            Admin: admin@luminatherapyalliance.com<br/>
-            Practice: admin@wtgtherapy.com<br/>
-            Employer: schen@meridiancap.com
+            Sign in with your Lumina account credentials.
           </div>
         </form>
       </div>

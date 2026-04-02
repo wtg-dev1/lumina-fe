@@ -1,18 +1,29 @@
-import React, { useState } from 'react'
-import { C } from '../../utils/constants'
-import { useStore } from '../../data/store'
+import React, { useEffect, useState } from 'react'
+import { C, ASSESS_BASE_URL } from '../../utils/constants'
+import { useCareStore, useOrgStore } from '../../data/stores'
 import { SH, Btn, Modal, ModalityBadge } from '../../components/ui'
 import { TH, TD } from '../../components/ui'
 import AssessmentForm from '../../components/AssessmentForm'
 
-const BASE_URL = 'https://ops.luminatherapyalliance.com'
-
 export default function AssessmentSendView({ practiceId = null }) {
-  const { state: db, dispatch } = useStore()
+  const care = useCareStore()
+  const org = useOrgStore()
+  const db = {
+    clients: care.clients,
+    assessments: care.assessments,
+    practices: org.practices,
+  }
 
-  const [activeForm, setActiveForm] = useState(null)  // { clientId, type } — in-person
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    care.ensureCoreLoaded()
+    care.ensureAssessmentsLoaded()
+  }, [org.ensureSummaryLoaded, care.ensureCoreLoaded, care.ensureAssessmentsLoaded])
+
+  const [activeForm, setActiveForm] = useState(null)  // { clientId, type, token } — in-person
   const [msgModal,   setMsgModal]   = useState(null)  // { client, type, token }
   const [tab,        setTab]        = useState('email')
+  const [starting,  setStarting]  = useState(false)
 
   const visibleClients = practiceId
     ? db.clients.filter(c => c.practiceId === practiceId && c.status === 'active')
@@ -40,23 +51,24 @@ export default function AssessmentSendView({ practiceId = null }) {
     return { label:`✓ ${days}d ago · score ${last.score}`, color:C.tealGreen, due:false }
   }
 
-  const createToken = (clientId, type) => {
-    const token = `lta_${clientId}_${type}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    dispatch({ type: 'SEND_ASSESSMENT', payload: { clientId, type, token } })
-    return token
+  const createToken = async (clientId, type) => {
+    const tokenFromBackend = await care.sendAssessment({ clientId, type })
+    if (typeof tokenFromBackend === 'string' && tokenFromBackend) return tokenFromBackend
+    throw new Error('Could not create assessment link.')
   }
 
   const handleFormSubmit = (answers, score) => {
-    dispatch({ type: 'COMPLETE_ASSESSMENT', payload: {
+    care.completeAssessment({
       clientId: activeForm.clientId,
       type:     activeForm.type,
+      token:    activeForm.token,
       answers, score,
-    }})
+    })
     setTimeout(() => setActiveForm(null), 3500)
   }
 
   const genEmail = (c, type, token) => {
-    const link     = `${BASE_URL}/assess/${token}`
+    const link     = `${ASSESS_BASE_URL}/assess/${token}`
     const name     = c.clientName || 'there'
     const typeName = type === 'PHQ9' ? 'PHQ-9 (depression screening, 9 questions)' : 'GAD-7 (anxiety screening, 7 questions)'
     return {
@@ -66,7 +78,7 @@ export default function AssessmentSendView({ practiceId = null }) {
   }
 
   const genText = (c, type, token) => {
-    const link = `${BASE_URL}/assess/${token}`
+    const link = `${ASSESS_BASE_URL}/assess/${token}`
     return `Lumina Therapy Alliance: Hi ${c.clientName?.split(' ')[0] || 'there'}, your ${type === 'PHQ9' ? 'depression (PHQ-9)' : 'anxiety (GAD-7)'} check-in is ready. Takes 2 min: ${link}  Questions? Call (718) 757-7033.`
   }
 
@@ -137,16 +149,74 @@ export default function AssessmentSendView({ practiceId = null }) {
                   </td>
                   <td style={TD(false)}>
                     <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                      <Btn variant="primary" small onClick={() => { setMsgModal({ client:c, type:'PHQ9', token:createToken(c.id, 'PHQ9') }); setTab('email') }}>
+                      <Btn
+                        variant="primary"
+                        small
+                        disabled={starting}
+                        onClick={async () => {
+                          setStarting(true)
+                          try {
+                            const token = await createToken(c.id, 'PHQ9')
+                            setMsgModal({ client: c, type: 'PHQ9', token })
+                            setTab('email')
+                          } finally {
+                            setStarting(false)
+                          }
+                        }}
+                      >
                         📧 PHQ-9 Link
                       </Btn>
-                      <Btn variant="primary" small onClick={() => { setMsgModal({ client:c, type:'GAD7', token:createToken(c.id, 'GAD7') }); setTab('email') }}>
+                      <Btn
+                        variant="primary"
+                        small
+                        disabled={starting}
+                        onClick={async () => {
+                          setStarting(true)
+                          try {
+                            const token = await createToken(c.id, 'GAD7')
+                            setMsgModal({ client: c, type: 'GAD7', token })
+                            setTab('email')
+                          } finally {
+                            setStarting(false)
+                          }
+                        }}
+                      >
                         📧 GAD-7 Link
                       </Btn>
                       {c.modality === 'in-person' && (
                         <>
-                          <Btn variant="ghost" small onClick={() => setActiveForm({ clientId:c.id, type:'PHQ9' })}>Start PHQ-9</Btn>
-                          <Btn variant="ghost" small onClick={() => setActiveForm({ clientId:c.id, type:'GAD7' })}>Start GAD-7</Btn>
+                          <Btn
+                            variant="ghost"
+                            small
+                            disabled={starting}
+                            onClick={async () => {
+                              setStarting(true)
+                              try {
+                                const token = await createToken(c.id, 'PHQ9')
+                                setActiveForm({ clientId: c.id, type: 'PHQ9', token })
+                              } finally {
+                                setStarting(false)
+                              }
+                            }}
+                          >
+                            Start PHQ-9
+                          </Btn>
+                          <Btn
+                            variant="ghost"
+                            small
+                            disabled={starting}
+                            onClick={async () => {
+                              setStarting(true)
+                              try {
+                                const token = await createToken(c.id, 'GAD7')
+                                setActiveForm({ clientId: c.id, type: 'GAD7', token })
+                              } finally {
+                                setStarting(false)
+                              }
+                            }}
+                          >
+                            Start GAD-7
+                          </Btn>
                         </>
                       )}
                     </div>
@@ -162,7 +232,7 @@ export default function AssessmentSendView({ practiceId = null }) {
         const { client: c, type, token } = msgModal
         const email = genEmail(c, type, token)
         const text  = genText(c, type, token)
-        const link  = `${BASE_URL}/assess/${token}`
+        const link  = `${ASSESS_BASE_URL}/assess/${token}`
         const msg   = tab === 'email' ? `Subject: ${email.subject}\n\n${email.body}` : text
         return (
           <Modal title={`Send ${type === 'PHQ9' ? 'PHQ-9' : 'GAD-7'} Link — ${c.clientName || c.anonId}`} onClose={() => setMsgModal(null)}>

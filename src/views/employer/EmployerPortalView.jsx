@@ -1,12 +1,37 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { C } from '../../utils/constants'
 import { fmt, phqSev, gadSev } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useCareStore, useFinanceStore, useOrgStore } from '../../data/stores'
 import { Badge } from '../../components/ui'
 import { TH, TD } from '../../components/ui'
 
 export default function EmployerPortalView({ employerId }) {
-  const { state: db } = useStore()
+  const org = useOrgStore()
+  const care = useCareStore()
+  const finance = useFinanceStore()
+  const db = {
+    employers: org.employers,
+    clients: care.clients,
+    sessions: care.sessions,
+    assessments: care.assessments,
+    invoices: finance.invoices,
+    adminFees: finance.adminFees,
+  }
+
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    care.ensureCoreLoaded()
+    care.ensureAssessmentsLoaded()
+    finance.ensureSummaryLoaded()
+    finance.ensureAdminFeesLoaded({ employerIds: [employerId] })
+  }, [
+    org.ensureSummaryLoaded,
+    care.ensureCoreLoaded,
+    care.ensureAssessmentsLoaded,
+    finance.ensureSummaryLoaded,
+    finance.ensureAdminFeesLoaded,
+    employerId,
+  ])
 
   const [tab, setTab] = useState('invoices')
 

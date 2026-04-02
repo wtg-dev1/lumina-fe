@@ -1,11 +1,23 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { C } from '../../utils/constants'
 import { phqSev, gadSev } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useCareStore, useOrgStore } from '../../data/stores'
 import { Bar } from '../../components/ui'
 
 export default function AssessmentsView() {
-  const { state: db } = useStore()
+  const org = useOrgStore()
+  const care = useCareStore()
+  const db = {
+    clients: care.clients,
+    assessments: care.assessments,
+    employers: org.employers,
+  }
+
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    care.ensureCoreLoaded()
+    care.ensureAssessmentsLoaded()
+  }, [org.ensureSummaryLoaded, care.ensureCoreLoaded, care.ensureAssessmentsLoaded])
 
   const [empFilter, setEmpFilter] = useState('all')
 

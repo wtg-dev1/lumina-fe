@@ -38,8 +38,7 @@ src/
 │   └── AssessmentForm.jsx      # PHQ-9 / GAD-7 client form component
 │
 ├── data/
-│   ├── seed.js                 # All seed/demo data
-│   └── store.js                # React Context + useReducer state store
+│   └── stores/                 # React context providers (care, org, finance)
 │
 ├── utils/
 │   ├── constants.js            # Colors, US states, PSYPACT list, question data
@@ -103,9 +102,8 @@ See `Lumina_Developer_Handoff.docx` for the complete technical spec.
 
 ### Key files for backend developer
 
-- **`src/utils/api.js`** — All API endpoints stubbed. Replace each stub with real `fetch()`.
-- **`src/data/store.js`** — All state mutations as Redux-style actions. Replace with API calls + state updates.
-- **`src/data/seed.js`** — All data models with exact field names matching the PostgreSQL schema.
+- **`src/utils/api.js`** — HTTP client for the Go backend (`fetch` to `VITE_API_URL` or `/api/v1`).
+- **`src/data/stores/`** — React context stores that load and mutate data via `api.js`.
 
 ### Authentication
 
@@ -157,6 +155,13 @@ When client clicks **Send Assessment Link** in the ops app:
 | Email | SendGrid |
 | SMS | Twilio |
 | Hosting | Vercel (frontend) + Railway/Fly.io (Go API) |
+
+---
+
+## UI Conventions
+
+- Use `ConfirmModal` from `src/components/ui/ConfirmModal.jsx` for user confirmations.
+- Do not use native browser dialogs (`window.alert`, `window.confirm`, `window.prompt`) in app views.
 
 ---
 

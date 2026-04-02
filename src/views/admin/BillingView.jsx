@@ -1,13 +1,20 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { C } from '../../utils/constants'
 import { fmt } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useFinanceStore, useOrgStore } from '../../data/stores'
 import { SH, StatCard, Badge, Btn } from '../../components/ui'
 
 export default function BillingView() {
-  const { state: db, dispatch } = useStore()
+  const org = useOrgStore()
+  const finance = useFinanceStore()
+  const db = { employers: org.employers, invoices: finance.invoices }
 
-  const updateStatus = (id, status) => dispatch({ type: 'UPDATE_INVOICE_STATUS', payload: { id, status } })
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    finance.ensureSummaryLoaded()
+  }, [org.ensureSummaryLoaded, finance.ensureSummaryLoaded])
+
+  const updateStatus = (id, status) => finance.updateInvoiceStatus({ id, status })
 
   const paid = db.invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.totalCents, 0)
   const pend = db.invoices.filter(i => ['sent', 'draft'].includes(i.status)).reduce((s, i) => s + i.totalCents, 0)

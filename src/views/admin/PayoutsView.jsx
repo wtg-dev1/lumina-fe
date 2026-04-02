@@ -1,14 +1,21 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { C } from '../../utils/constants'
 import { fmt } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useFinanceStore, useOrgStore } from '../../data/stores'
 import { SH, StatCard, Badge, Btn } from '../../components/ui'
 import { TH, TD } from '../../components/ui'
 
 export default function PayoutsView() {
-  const { state: db, dispatch } = useStore()
+  const org = useOrgStore()
+  const finance = useFinanceStore()
+  const db = { practices: org.practices, payouts: finance.payouts }
 
-  const updateStatus = (id, status) => dispatch({ type: 'UPDATE_PAYOUT', payload: { id, status } })
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    finance.ensureSummaryLoaded()
+  }, [org.ensureSummaryLoaded, finance.ensureSummaryLoaded])
+
+  const updateStatus = (id, status) => finance.updatePayoutStatus({ id, status })
 
   const paid   = db.payouts.filter(p => p.status === 'paid').reduce((s, p) => s + p.netCents, 0)
   const pend   = db.payouts.filter(p => ['pending', 'processing'].includes(p.status)).reduce((s, p) => s + p.netCents, 0)

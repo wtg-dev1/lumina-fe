@@ -1,11 +1,65 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { C, US_STATES, PSYPACT_STATES, PRESENTING_NEEDS, SESSION_TYPES, STATUS_FLOW } from '../../utils/constants'
 import { today, getServiceability } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useCareStore, useOrgStore } from '../../data/stores'
 import { SH, Btn, Inp, Sel, Modal, Badge, ModalityBadge } from '../../components/ui'
 
 export default function ReferralsView() {
-  const { state: db, dispatch } = useStore()
+  const org = useOrgStore()
+  const care = useCareStore()
+  const db = {
+    employers: org.employers,
+    practices: org.practices,
+    clinicians: org.clinicians,
+    clients: care.clients,
+    referrals: care.referrals,
+  }
+  const [page, setPage] = useState(1)
+  const [limit] = useState(15)
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
+  const prevDebouncedQRef = useRef(debouncedQ)
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQ(searchInput.trim()), 500)
+    return () => clearTimeout(id)
+  }, [searchInput])
+  const [apiError, setApiError] = useState('')
+  const [submitLoading, setSubmitLoading] = useState(false)
+  const [statusUpdatingId, setStatusUpdatingId] = useState('')
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        await org.ensureDetailsLoaded()
+        await care.ensureCoreLoaded()
+        setApiError('')
+      } catch (e) {
+        setApiError(e?.message || 'Failed loading referrals.')
+      }
+    })()
+    // Intentionally run once on mount; store methods are not stable references.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const qChanged = prevDebouncedQRef.current !== debouncedQ
+        prevDebouncedQRef.current = debouncedQ
+        const effectivePage = qChanged ? 1 : page
+        if (qChanged && page !== 1) setPage(1)
+        await care.load_referrals_page({
+          page: effectivePage,
+          limit,
+          q: debouncedQ || undefined,
+        })
+        setApiError('')
+      } catch (e) {
+        setApiError(e?.message || 'Failed loading referrals.')
+      }
+    })()
+  }, [page, limit, debouncedQ])
 
   const [modal, setModal]   = useState(false)
   const [msgModal, setMsgModal] = useState(null)  // referral id
@@ -42,21 +96,45 @@ export default function ReferralsView() {
     setStep(1)
   }
 
-  const submit = () => {
-    dispatch({ type: 'ADD_REFERRAL', payload: {
-      referral:    { ...form },
-      practiceId:  match.practiceId,
-      clinicianId: match.clinicianId,
-    }})
-    setModal(false)
-    resetForm()
+  const submit = async () => {
+    try {
+      setSubmitLoading(true)
+      await care.addReferral({
+        referral: {
+          ...form,
+          status: 'pending',
+          practiceId: match.practiceId || form.practiceId,
+          clinicianId: match.clinicianId,
+        },
+        practiceId: match.practiceId || form.practiceId,
+        clinicianId: match.clinicianId,
+      })
+      await care.load_referrals_page({ page, limit, q: debouncedQ || undefined, force: true })
+      setApiError('')
+      setModal(false)
+      resetForm()
+    } catch (e) {
+      setApiError(e?.message || 'Failed to create referral.')
+    } finally {
+      setSubmitLoading(false)
+    }
   }
 
-  const updateStatus = (id, status) => {
-    dispatch({ type: 'UPDATE_REFERRAL', payload: {
-      id, status,
-      ...(status === 'scheduled' ? { scheduledAt: today() } : {}),
-    }})
+  const updateStatus = async (id, status) => {
+    try {
+      setStatusUpdatingId(id)
+      await care.updateReferral({
+        id,
+        status,
+        ...(status === 'scheduled' ? { scheduledAt: today() } : {}),
+      })
+      await care.load_referrals_page({ page, limit, q: debouncedQ || undefined, force: true })
+      setApiError('')
+    } catch (e) {
+      setApiError(e?.message || 'Failed to update referral.')
+    } finally {
+      setStatusUpdatingId('')
+    }
   }
 
   const genMessage = (ref, mode) => {
@@ -72,8 +150,10 @@ export default function ReferralsView() {
     ...STATUS_FLOW.reduce((a, s) => ({ ...a, [s]: db.referrals.filter(r => r.status === s).length }), {}),
   }
 
-  const filtered = filter === 'all' ? db.referrals : db.referrals.filter(r => r.status === filter)
-  const sorted   = [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const pagedReferrals = care.referrals_page_items || []
+  const pagination = care.referrals_pagination || { page: 1, limit, total: pagedReferrals.length, total_pages: 1 }
+  const filtered = filter === 'all' ? pagedReferrals : pagedReferrals.filter(r => r.status === filter)
+  const sorted   = [...filtered].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
 
   const msgRef = msgModal ? db.referrals.find(r => r.id === msgModal) : null
 
@@ -82,7 +162,36 @@ export default function ReferralsView() {
   return (
     <div>
       <SH title="Referrals" sub="Intake · matching · client outreach"
-        action={<Btn onClick={() => { resetForm(); setModal(true) }}>+ New Referral</Btn>}/>
+        action={
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', justifyContent:'flex-end' }}>
+            <input
+              type="search"
+              placeholder="Search referrals…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search referrals"
+              style={{
+                width: 220,
+                minWidth: 160,
+                boxSizing: 'border-box',
+                border: `1px solid ${C.border}`,
+                borderRadius: 4,
+                padding: '8px 10px',
+                fontSize: 13,
+                color: C.textDark,
+                fontFamily: 'Arial,sans-serif',
+                outline: 'none',
+              }}
+            />
+            <Btn onClick={() => { resetForm(); setModal(true) }}>+ New Referral</Btn>
+          </div>
+        }/>
+
+      {(apiError || care.referrals_error) && (
+        <div style={{ background:'#FCE8E8', border:'1px solid #D9534F', borderRadius:4, padding:'10px 14px', color:'#B03A3A', fontSize:12, marginBottom:12 }}>
+          {apiError || care.referrals_error}
+        </div>
+      )}
 
       <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' }}>
         {[['all','All'], ['pending','Pending'], ['scheduled','Scheduled'], ['active','Active'], ['discharged','Discharged']].map(([v, l]) => (
@@ -94,7 +203,12 @@ export default function ReferralsView() {
       </div>
 
       <div style={{ display:'grid', gap:12 }}>
-        {sorted.length === 0 && (
+        {care.referrals_loading && (
+          <div style={{ ...card, padding:24, textAlign:'center', color:C.textMid, fontSize:13 }}>
+            Loading referrals...
+          </div>
+        )}
+        {!care.referrals_loading && sorted.length === 0 && (
           <div style={{ ...card, padding:24, textAlign:'center', color:C.textMid, fontSize:13 }}>
             No referrals{filter !== 'all' ? ` with status "${filter}"` : ''}.
           </div>
@@ -116,7 +230,16 @@ export default function ReferralsView() {
                 </div>
                 <div style={{ display:'flex', gap:7 }}>
                   <Btn variant="ghost" small onClick={() => { setMsgTab('email'); setMsgModal(ref.id) }}>📨 Message</Btn>
-                  {nextStatus && <Btn variant="secondary" small onClick={() => updateStatus(ref.id, nextStatus)}>{nextLabel}</Btn>}
+                  {nextStatus && (
+                    <Btn
+                      variant="secondary"
+                      small
+                      onClick={() => updateStatus(ref.id, nextStatus)}
+                      disabled={statusUpdatingId === ref.id || care.referrals_loading}
+                    >
+                      {statusUpdatingId === ref.id ? 'Updating...' : nextLabel}
+                    </Btn>
+                  )}
                 </div>
               </div>
 
@@ -171,6 +294,31 @@ export default function ReferralsView() {
             </div>
           )
         })}
+      </div>
+
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14, gap:10 }}>
+        <div style={{ fontSize:12, color:C.textMid }}>
+          Page <strong style={{ color:C.textDark }}>{pagination.page}</strong> of <strong style={{ color:C.textDark }}>{Math.max(1, pagination.total_pages || 1)}</strong>
+          <span style={{ marginLeft:8 }}>· Total referrals: <strong style={{ color:C.textDark }}>{pagination.total || 0}</strong></span>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn
+            variant="secondary"
+            small
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={pagination.page <= 1 || care.referrals_loading}
+          >
+            Prev
+          </Btn>
+          <Btn
+            variant="secondary"
+            small
+            onClick={() => setPage((p) => Math.min((pagination.total_pages || 1), p + 1))}
+            disabled={pagination.page >= (pagination.total_pages || 1) || care.referrals_loading}
+          >
+            Next
+          </Btn>
+        </div>
       </div>
 
       {/* ── New referral modal (3-step) ── */}
@@ -316,7 +464,7 @@ export default function ReferralsView() {
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
                   <Btn variant="secondary" onClick={() => setStep(2)}>← Back</Btn>
-                  <Btn onClick={submit}>Submit Referral</Btn>
+                  <Btn onClick={submit} disabled={submitLoading}>{submitLoading ? 'Submitting...' : 'Submit Referral'}</Btn>
                 </div>
               </div>
             )

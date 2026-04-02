@@ -1,12 +1,34 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { C } from '../../utils/constants'
 import { fmt } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useCareStore, useFinanceStore, useOrgStore } from '../../data/stores'
 import { SH, StatCard, Bar } from '../../components/ui'
 import { Badge } from '../../components/ui'
 
-export default function DashboardView({ setView }) {
-  const { state: db } = useStore()
+export default function DashboardView({ onNavigate = () => {} }) {
+  const org = useOrgStore()
+  const care = useCareStore()
+  const finance = useFinanceStore()
+  const db = {
+    employers: org.employers,
+    practices: org.practices,
+    sessions: care.sessions,
+    referrals: care.referrals,
+    invoices: finance.invoices,
+    adminFees: finance.adminFees,
+    payouts: finance.payouts,
+  }
+
+  useEffect(() => {
+    org.ensureSummaryLoaded()
+    care.ensureCoreLoaded()
+    finance.ensureSummaryLoaded()
+  }, [org.ensureSummaryLoaded, care.ensureCoreLoaded, finance.ensureSummaryLoaded])
+
+  useEffect(() => {
+    if (!org.employers.length) return
+    finance.ensureAdminFeesLoaded({ employerIds: org.employers.map((e) => e.id) })
+  }, [org.employers, finance.ensureAdminFeesLoaded])
 
   const totalRev    = db.invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+i.totalCents,0)
   const pendRev     = db.invoices.filter(i=>['sent','draft'].includes(i.status)).reduce((s,i)=>s+i.totalCents,0)
@@ -35,7 +57,7 @@ export default function DashboardView({ setView }) {
         <StatCard label="Sessions MTD"     value={mtd}             sub="March 2026"         accent={C.tealDark} />
       </div>
 
-      {pendRef>0&&<div onClick={()=>setView('referrals')} style={{background:`${C.teal}0d`,border:`1px solid ${C.teal}40`,borderRadius:4,padding:'10px 14px',fontSize:13,color:C.teal,marginBottom:8,cursor:'pointer',fontWeight:600}}>
+      {pendRef>0&&<div onClick={()=>onNavigate('/ops/admin/referrals')} style={{background:`${C.teal}0d`,border:`1px solid ${C.teal}40`,borderRadius:4,padding:'10px 14px',fontSize:13,color:C.teal,marginBottom:8,cursor:'pointer',fontWeight:600}}>
         📋 {pendRef} pending referral{pendRef>1?'s':''} awaiting practice match — <span style={{textDecoration:'underline'}}>view referrals →</span>
       </div>}
 

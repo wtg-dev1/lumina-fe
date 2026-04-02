@@ -1,17 +1,37 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { C, PSYPACT_STATES } from '../../utils/constants'
 import { fmt, today } from '../../utils/helpers'
-import { useStore } from '../../data/store'
+import { useCareStore, useFinanceStore, useOrgStore } from '../../data/stores'
 import { Btn, Inp, Modal, ModalityBadge } from '../../components/ui'
 
 export default function PracticePortalView({ practiceId }) {
-  const { state: db, dispatch } = useStore()
+  const org = useOrgStore()
+  const care = useCareStore()
+  const finance = useFinanceStore()
+  const db = {
+    practices: org.practices,
+    clinicians: org.clinicians,
+    employers: org.employers,
+    clients: care.clients,
+    referrals: care.referrals,
+    sessions: care.sessions,
+    payouts: finance.payouts,
+  }
+
+  useEffect(() => {
+    org.ensureDetailsLoaded()
+    care.ensureCoreLoaded()
+    finance.ensureSummaryLoaded()
+  }, [org.ensureDetailsLoaded, care.ensureCoreLoaded, finance.ensureSummaryLoaded])
 
   const [nameModal, setNameModal] = useState(null)  // { refId, anonId }
   const [nameInput, setNameInput] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionLoadingId, setActionLoadingId] = useState('')
+  const [confirmLoading, setConfirmLoading] = useState(false)
 
   const prac           = db.practices.find(p => p.id === practiceId)
-  const myReferrals    = (db.referrals || []).filter(r => r.practiceId === practiceId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const myReferrals    = (db.referrals || []).filter(r => r.practiceId === practiceId).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
   const mySessions     = db.sessions.filter(s => s.practiceId === practiceId)
   const myPayouts      = db.payouts.filter(p => p.practiceId === practiceId)
   const pendingActions = myReferrals.filter(r => !r.practiceSessionBookedAt && r.practiceId).length
@@ -30,24 +50,42 @@ export default function PracticePortalView({ practiceId }) {
     return                                  { label:'Awaiting Confirmation',   bg:'#FCE8E8', color:'#B03A3A',  border:'#D9534F' }
   }
 
-  const handleStep = (ref, next) => {
+  const handleStep = async (ref, next) => {
     if (next.needsName) {
       setNameModal({ refId: ref.id, anonId: ref.anonId })
       setNameInput('')
-    } else if (next.action === 'contacted') {
-      dispatch({ type: 'REFERRAL_CONTACTED', payload: { id: ref.id } })
-    } else if (next.action === 'booked') {
-      dispatch({ type: 'REFERRAL_BOOKED', payload: { id: ref.id } })
+      return
+    }
+
+    try {
+      setActionLoadingId(ref.id)
+      if (next.action === 'contacted') {
+        await care.markReferralContacted(ref.id)
+      } else if (next.action === 'booked') {
+        await care.markReferralBooked(ref.id)
+      }
+      setActionError('')
+    } catch (e) {
+      setActionError(e?.message || 'Unable to update referral workflow step.')
+    } finally {
+      setActionLoadingId('')
     }
   }
 
-  const confirmReceipt = () => {
-    dispatch({ type: 'CONFIRM_REFERRAL', payload: {
-      refId:      nameModal.refId,
-      anonId:     nameModal.anonId,
-      clientName: nameInput.trim(),
-    }})
-    setNameModal(null)
+  const confirmReceipt = async () => {
+    try {
+      setConfirmLoading(true)
+      await care.confirmReferral({
+        refId:      nameModal.refId,
+        clientName: nameInput.trim(),
+      })
+      setActionError('')
+      setNameModal(null)
+    } catch (e) {
+      setActionError(e?.message || 'Unable to confirm referral receipt.')
+    } finally {
+      setConfirmLoading(false)
+    }
   }
 
   const card = { background: C.white, border: `1px solid ${C.border}`, borderRadius: 5 }
@@ -93,6 +131,11 @@ export default function PracticePortalView({ practiceId }) {
 
       {/* Referrals */}
       <div style={{ fontSize:11, fontWeight:700, color:C.textMid, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:12 }}>Incoming Referrals</div>
+      {actionError && (
+        <div style={{ background:'#FCE8E8', border:'1px solid #D9534F', borderRadius:4, padding:'10px 14px', color:'#B03A3A', fontSize:12, marginBottom:12 }}>
+          {actionError}
+        </div>
+      )}
 
       {myReferrals.length === 0 && (
         <div style={{ ...card, padding:24, textAlign:'center', color:C.textMid, fontSize:13 }}>No referrals assigned to this practice yet.</div>
@@ -133,8 +176,9 @@ export default function PracticePortalView({ practiceId }) {
                 </div>
                 {next && (
                   <button onClick={() => handleStep(ref, next)}
+                    disabled={actionLoadingId === ref.id || confirmLoading}
                     style={{ background:next.color, color:C.white, border:'none', borderRadius:4, padding:'8px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Arial,sans-serif', whiteSpace:'nowrap' }}>
-                    {next.label}
+                    {actionLoadingId === ref.id ? 'Saving...' : next.label}
                   </button>
                 )}
               </div>
@@ -176,7 +220,9 @@ export default function PracticePortalView({ practiceId }) {
             Enter the client's full name. Visible to your practice and Lumina admin only — never shared with employers.
           </div>
           <Inp label="Client Full Name" value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="First Last"/>
-          <Btn onClick={confirmReceipt} disabled={!nameInput.trim()}>Confirm Receipt</Btn>
+          <Btn onClick={confirmReceipt} disabled={!nameInput.trim() || confirmLoading}>
+            {confirmLoading ? 'Confirming...' : 'Confirm Receipt'}
+          </Btn>
         </Modal>
       )}
     </div>

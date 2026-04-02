@@ -8,17 +8,16 @@
  *   /assess            → assessment selector (no auth, used in dev)
  */
 
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { StoreProvider } from './data/store'
-import { C } from './utils/constants'
+import { OpsStoresProvider } from './data/stores'
 import OpsApp from './views/OpsApp'
 import LoginPage from './views/LoginPage'
 import AssessPage from './views/AssessPage'
 
 export default function App() {
   return (
-    <StoreProvider>
+    <OpsStoresProvider>
       <Routes>
         {/* Public — no auth */}
         <Route path="/assess/:token" element={<AssessPage />} />
@@ -26,8 +25,10 @@ export default function App() {
         <Route path="/login"         element={<LoginPage />} />
 
         {/* Protected — ops platform */}
-        <Route path="/*" element={<OpsApp />} />
+        <Route path="/" element={<Navigate to="/ops" replace />} />
+        <Route path="/ops/*" element={<OpsApp />} />
+        <Route path="*" element={<Navigate to="/ops" replace />} />
       </Routes>
-    </StoreProvider>
+    </OpsStoresProvider>
   )
 }

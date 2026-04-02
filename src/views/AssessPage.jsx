@@ -13,12 +13,12 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { C, PHQ9_QUESTIONS, GAD7_QUESTIONS } from '../utils/constants'
 import { phqSev, gadSev } from '../utils/helpers'
 import AssessmentForm from '../components/AssessmentForm'
-import { useStore } from '../data/store'
+import { usePublicAssessmentStore } from '../data/stores'
 
 export default function AssessPage() {
+  const publicAssessment = usePublicAssessmentStore()
   const { token }           = useParams()
   const [searchParams]      = useSearchParams()
-  const { state, dispatch } = useStore()
 
   const urlType = searchParams.get('type') || ''
   const urlName = searchParams.get('name') || ''
@@ -29,31 +29,26 @@ export default function AssessPage() {
   const [clientId,    setClientId]    = useState(null)
   const [score,       setScore]       = useState(null)
   const [loading,     setLoading]     = useState(!!token)
-  const [error,       setError]       = useState('')
+  const [error,       setError]       = useState(publicAssessment.error)
 
   useEffect(() => {
     if (!token) { setLoading(false); return }
 
-    // TODO: Replace with real API call:
-    // const data = await api.assessments.getByToken(token)
-    // setClientName(data.clientName)
-    // setInstrument(data.type)
-    // setClientId(data.clientId)
-    // setScreen('form')
-
-    // Demo: resolve token from local store
-    const pending = state.assessments.find(a => a.token === token)
-    if (pending) {
-      const client = state.clients.find(c => c.id === pending.clientId)
-      setClientName(client?.clientName || '')
-      setInstrument(pending.type)
-      setClientId(pending.clientId)
-      setScreen('form')
-    } else {
-      setError('This assessment link is invalid or has already been completed.')
-    }
-    setLoading(false)
-  }, [token])
+    setError('')
+    ;(async () => {
+      try {
+        const data = await publicAssessment.loadByToken(token)
+        setClientName(data?.clientName || '')
+        setInstrument(data?.type || '')
+        setClientId(data?.clientId || null)
+        setScreen('form')
+      } catch (e) {
+        setError(publicAssessment.error || 'This assessment link is invalid or has already been completed.')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [token, publicAssessment])
 
   // Auto-start if type is in URL
   useEffect(() => {
@@ -63,16 +58,22 @@ export default function AssessPage() {
     }
   }, [urlType])
 
-  const handleSubmit = (answers, totalScore) => {
+  const handleSubmit = async (answers, totalScore) => {
     setScore(totalScore)
 
-    // TODO: Replace with real API call:
-    // await api.assessments.submitByToken(token, { answers, score: totalScore, completedAt: new Date().toISOString() })
-
-    // Demo: update local store
-    if (clientId) {
-      dispatch({ type:'COMPLETE_ASSESSMENT', payload:{ clientId, type:instrument, score:totalScore, answers } })
+    if (token) {
+      try {
+        await publicAssessment.submitByToken(token, {
+          answers,
+          score: totalScore,
+          completedAt: new Date().toISOString(),
+        })
+      } catch (e) {
+        setError(e?.message || 'Failed to submit assessment. Please try again.')
+        return
+      }
     }
+
     setScreen('done')
   }
 

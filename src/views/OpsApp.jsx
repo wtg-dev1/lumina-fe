@@ -3,10 +3,14 @@
  * Handles role detection, sidebar nav, and view routing.
  */
 
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { C } from '../utils/constants'
-import { useStore } from '../data/store'
+import {
+  useAuthStore,
+  useOrgStore,
+  useUiShellStore,
+} from '../data/stores'
 
 // ── View imports ──────────────────────────────────────────────────────────────
 import DashboardView      from './admin/DashboardView'
@@ -22,28 +26,32 @@ import BillingView        from './admin/BillingView'
 import PayoutsView        from './admin/PayoutsView'
 import ROIView            from './admin/ROIView'
 import PracticePortalView from './practice/PracticePortalView'
+import PracticeCliniciansView from './practice/PracticeCliniciansView'
+import PracticeSessionsView from './practice/PracticeSessionsView'
 import EmployerPortalView from './employer/EmployerPortalView'
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 const ADMIN_NAV = [
-  { id:'dashboard',        l:'Dashboard' },
-  { id:'referrals',        l:'Referrals ✦' },
-  { id:'employers',        l:'Employers' },
-  { id:'practices',        l:'Practices' },
-  { id:'clients',          l:'Clients' },
-  { id:'sessions',         l:'Sessions' },
-  { id:'assessments',      l:'Assessments' },
-  { id:'send-assessments', l:'Send Assessments' },
-  { id:'banking',          l:'Banking 🔒' },
-  { id:'billing',          l:'Billing' },
-  { id:'payouts',          l:'Payouts' },
-  { id:'roi',              l:'ROI Reports' },
+  { id:'dashboard',        l:'Dashboard',        path:'/ops/admin/dashboard' },
+  { id:'referrals',        l:'Referrals ✦',      path:'/ops/admin/referrals' },
+  { id:'employers',        l:'Employers',        path:'/ops/admin/employers' },
+  { id:'practices',        l:'Practices',        path:'/ops/admin/practices' },
+  { id:'clients',          l:'Clients',          path:'/ops/admin/clients' },
+  { id:'sessions',         l:'Sessions',         path:'/ops/admin/sessions' },
+  { id:'assessments',      l:'Assessments',      path:'/ops/admin/assessments' },
+  { id:'send-assessments', l:'Send Assessments', path:'/ops/admin/send-assessments' },
+  { id:'banking',          l:'Banking 🔒',       path:'/ops/admin/banking' },
+  { id:'billing',          l:'Billing',          path:'/ops/admin/billing' },
+  { id:'payouts',          l:'Payouts',          path:'/ops/admin/payouts' },
+  { id:'roi',              l:'ROI Reports',      path:'/ops/admin/roi' },
 ]
 
 const PRACTICE_NAV = [
-  { id:'practice',              l:'My Referrals' },
-  { id:'practice-clients',      l:'My Clients' },
-  { id:'practice-assessments',  l:'Send Assessments' },
+  { id:'practice',              l:'My Referrals',      path:'/ops/practice/portal' },
+  { id:'practice-clinicians',   l:'My Clinicians',     path:'/ops/practice/clinicians' },
+  { id:'practice-sessions',     l:'My Sessions',       path:'/ops/practice/sessions' },
+  { id:'practice-clients',      l:'My Clients',        path:'/ops/practice/clients' },
+  { id:'practice-assessments',  l:'Send Assessments',  path:'/ops/practice/assessments' },
 ]
 
 // ── Responsive hook ───────────────────────────────────────────────────────────
@@ -59,46 +67,81 @@ function useIsMobile() {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function OpsApp() {
-  const { state } = useStore()
+  const { isAuthenticated, logout } = useAuthStore()
+  const { employers, practices, summaryLoaded, ensureSummaryLoaded } = useOrgStore()
+  const { role, navOpen, setNavOpen, switchRole } = useUiShellStore()
   const navigate  = useNavigate()
+  const location = useLocation()
   const isMobile  = useIsMobile()
+  const safeEmployers = Array.isArray(employers) ? employers : []
+  const safePractices = Array.isArray(practices) ? practices : []
 
-  const [view,    setView]    = useState('dashboard')
-  const [role,    setRole]    = useState(() => localStorage.getItem('lumina_role') || 'admin')
-  const [navOpen, setNavOpen] = useState(false)
+  const roleKind = useMemo(() => {
+    if (role === 'admin') return 'admin'
+    if (safeEmployers.some((e) => e.id === role)) return 'employer'
+    if (safePractices.some((p) => p.id === role)) return 'practice'
+    if (location.pathname.startsWith('/ops/employer')) return 'employer'
+    if (location.pathname.startsWith('/ops/practice')) return 'practice'
+    return 'practice'
+  }, [role, safeEmployers, safePractices, location.pathname])
+  const isAdmin = roleKind === 'admin'
+  const isPractice = roleKind === 'practice'
+  const isEmployer = roleKind === 'employer'
 
-  // Role classification
-  const isPractice = state.practices.some(p => p.id === role)
-  const isEmployer = state.employers.some(e => e.id === role)
-  const isAdmin    = !isPractice && !isEmployer
+  const currentPrac = isPractice ? safePractices.find(p => p.id === role) : null
+  const currentEmp  = isEmployer ? safeEmployers.find(e => e.id === role) : null
 
-  const currentPrac = isPractice ? state.practices.find(p => p.id === role) : null
-  const currentEmp  = isEmployer ? state.employers.find(e => e.id === role) : null
-
+  const currentAdminNav = ADMIN_NAV.find((n) => location.pathname === n.path)
+  const currentPracticeNav = PRACTICE_NAV.find((n) => location.pathname === n.path)
   const navLabel = isPractice
     ? currentPrac?.name
     : isEmployer
     ? currentEmp?.name
-    : ADMIN_NAV.find(n => n.id === view)?.l
+    : currentAdminNav?.l
 
-  const handleNav = (id) => { setView(id); setNavOpen(false) }
+  const handleNav = (path) => {
+    navigate(path)
+    setNavOpen(false)
+  }
 
   const handleRole = (r) => {
-    setRole(r)
-    localStorage.setItem('lumina_role', r)
-    const newIsPractice = state.practices.some(p => p.id === r)
-    const newIsEmployer = state.employers.some(e => e.id === r)
-    if (r === 'admin')    setView('dashboard')
-    else if (newIsEmployer) setView('employer-portal')
-    else                    setView('practice')
+    switchRole(r)
+    const newIsPractice = safePractices.some(p => p.id === r)
+    const newIsEmployer = safeEmployers.some(e => e.id === r)
+    if (r === 'admin') navigate('/ops/admin/dashboard')
+    else if (newIsEmployer) navigate('/ops/employer/portal')
+    else if (newIsPractice) navigate('/ops/practice/portal')
+    else navigate('/ops')
     setNavOpen(false)
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('lumina_role')
-    localStorage.removeItem('lumina_token')
+    logout()
     navigate('/login')
   }
+
+  useEffect(() => {
+    ensureSummaryLoaded()
+  }, [ensureSummaryLoaded])
+
+  useEffect(() => {
+    if (!location.pathname.startsWith('/ops')) return
+    if (location.pathname !== '/ops') return
+    if (role === 'admin') {
+      navigate('/ops/admin/dashboard', { replace: true })
+      return
+    }
+    if (!summaryLoaded) return
+    if (safeEmployers.some((e) => e.id === role)) {
+      navigate('/ops/employer/portal', { replace: true })
+      return
+    }
+    if (safePractices.some((p) => p.id === role) || role !== 'admin') {
+      navigate('/ops/practice/portal', { replace: true })
+    }
+  }, [location.pathname, role, summaryLoaded, safeEmployers, safePractices, navigate])
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />
 
   // ── Sidebar component ──────────────────────────────────────────────────────
   const Sidebar = () => (
@@ -133,13 +176,13 @@ export default function OpsApp() {
       <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }}>
         {isPractice ? (
           PRACTICE_NAV.map(n => (
-            <NavBtn key={n.id} label={n.l} active={view===n.id} onClick={() => handleNav(n.id)}/>
+            <NavBtn key={n.id} label={n.l} active={location.pathname===n.path} onClick={() => handleNav(n.path)}/>
           ))
         ) : isEmployer ? (
-          <NavBtn label="My Portal" active={true} onClick={() => handleNav('employer-portal')}/>
+          <NavBtn label="My Portal" active={location.pathname==='/ops/employer/portal'} onClick={() => handleNav('/ops/employer/portal')}/>
         ) : (
           ADMIN_NAV.map(n => (
-            <NavBtn key={n.id} label={n.l} active={view===n.id} onClick={() => handleNav(n.id)}/>
+            <NavBtn key={n.id} label={n.l} active={location.pathname===n.path} onClick={() => handleNav(n.path)}/>
           ))
         )}
       </nav>
@@ -151,10 +194,10 @@ export default function OpsApp() {
           style={{ width:'100%', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:4, padding:'7px 8px', fontSize:11, color:C.white, fontFamily:'Arial,sans-serif', cursor:'pointer', outline:'none' }}>
           <option value="admin">🔑 Lumina Admin</option>
           <optgroup label="── Practices ──">
-            {state.practices.map(p => <option key={p.id} value={p.id}>🏥 {p.name.length>24?p.name.slice(0,24)+'…':p.name}</option>)}
+            {safePractices.map(p => <option key={p.id} value={p.id}>🏥 {p.name.length>24?p.name.slice(0,24)+'…':p.name}</option>)}
           </optgroup>
           <optgroup label="── Employers ──">
-            {state.employers.map(e => <option key={e.id} value={e.id}>🏢 {e.name.length>24?e.name.slice(0,24)+'…':e.name}</option>)}
+            {safeEmployers.map(e => <option key={e.id} value={e.id}>🏢 {e.name.length>24?e.name.slice(0,24)+'…':e.name}</option>)}
           </optgroup>
         </select>
         {isPractice  && <div style={{ fontSize:10, color:'#A8D5D5', marginTop:5 }}>{currentPrac?.city}</div>}
@@ -189,7 +232,7 @@ export default function OpsApp() {
             <div style={{ fontSize:12, color:C.textMid }}>
               <span style={{ color:C.teal, fontWeight:700 }}>Lumina</span>
               <span style={{ margin:'0 6px', color:C.border }}>›</span>
-              <span style={{ fontWeight:600, color:C.textDark }}>{navLabel}</span>
+              <span style={{ fontWeight:600, color:C.textDark }}>{navLabel || currentPracticeNav?.l || 'Portal'}</span>
             </div>
           </div>
           <div style={{ fontSize:11, color:C.textMid }}>Mar 2026</div>
@@ -197,27 +240,31 @@ export default function OpsApp() {
 
         {/* Content */}
         <div style={{ maxWidth:1100, margin:'0 auto', padding:isMobile?'16px 12px':'26px 26px' }}>
-          {/* Employer portal */}
-          {isEmployer && <EmployerPortalView employerId={role}/>}
+          <Routes>
+            <Route path="/" element={<Navigate to={role === 'admin' ? '/ops/admin/dashboard' : '/ops/practice/portal'} replace />} />
 
-          {/* Practice portal */}
-          {isPractice && view==='practice'             && <PracticePortalView    practiceId={role}/>}
-          {isPractice && view==='practice-clients'     && <ClientsView           practiceId={role}/>}
-          {isPractice && view==='practice-assessments' && <AssessmentSendView    practiceId={role}/>}
+            <Route path="/admin/dashboard" element={isAdmin ? <DashboardView onNavigate={navigate} /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/referrals" element={isAdmin ? <ReferralsView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/employers" element={isAdmin ? <EmployersView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/practices" element={isAdmin ? <PracticesView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/clients" element={isAdmin ? <ClientsView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/sessions" element={isAdmin ? <SessionsView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/assessments" element={isAdmin ? <AssessmentsView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/send-assessments" element={isAdmin ? <AssessmentSendView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/banking" element={isAdmin ? <BankingView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/billing" element={isAdmin ? <BillingView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/payouts" element={isAdmin ? <PayoutsView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/roi" element={isAdmin ? <ROIView /> : <Navigate to="/ops" replace />} />
 
-          {/* Admin views */}
-          {isAdmin && view==='dashboard'        && <DashboardView      setView={setView}/>}
-          {isAdmin && view==='referrals'        && <ReferralsView      />}
-          {isAdmin && view==='employers'        && <EmployersView      />}
-          {isAdmin && view==='practices'        && <PracticesView      />}
-          {isAdmin && view==='clients'          && <ClientsView        />}
-          {isAdmin && view==='sessions'         && <SessionsView       />}
-          {isAdmin && view==='assessments'      && <AssessmentsView    />}
-          {isAdmin && view==='send-assessments' && <AssessmentSendView />}
-          {isAdmin && view==='banking'          && <BankingView        />}
-          {isAdmin && view==='billing'          && <BillingView        />}
-          {isAdmin && view==='payouts'          && <PayoutsView        />}
-          {isAdmin && view==='roi'              && <ROIView            />}
+            <Route path="/practice/portal" element={isPractice ? <PracticePortalView practiceId={role} /> : <Navigate to="/ops" replace />} />
+            <Route path="/practice/clinicians" element={isPractice ? <PracticeCliniciansView practiceId={role} /> : <Navigate to="/ops" replace />} />
+            <Route path="/practice/sessions" element={isPractice ? <PracticeSessionsView practiceId={role} /> : <Navigate to="/ops" replace />} />
+            <Route path="/practice/clients" element={isPractice ? <ClientsView practiceId={role} /> : <Navigate to="/ops" replace />} />
+            <Route path="/practice/assessments" element={isPractice ? <AssessmentSendView practiceId={role} /> : <Navigate to="/ops" replace />} />
+
+            <Route path="/employer/portal" element={isEmployer ? <EmployerPortalView employerId={role} /> : <Navigate to="/ops" replace />} />
+            <Route path="*" element={<Navigate to="/ops" replace />} />
+          </Routes>
         </div>
       </div>
     </div>
