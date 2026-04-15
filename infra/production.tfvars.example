@@ -1,0 +1,13 @@
+# Copy to production.tfvars and fill in. Then:
+#   terraform workspace new production  (first time only)
+#   terraform workspace select production
+#   terraform apply -var-file=production.tfvars
+
+environment     = "production"
+aws_region      = "us-east-1"
+domain_name     = "luminatherapyalliance.com"
+fe_subdomain    = "ops"
+route53_zone_id = "ZXXXXXXXXX" # Hosted zone ID for luminatherapyalliance.com
+
+github_org  = "wtg-dev1"
+github_repo = "lumina-fe"

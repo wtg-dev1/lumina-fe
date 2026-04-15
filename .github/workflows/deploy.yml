@@ -1,0 +1,94 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master # → staging
+      - prod   # → production
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: "20"
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref_name }}" == "master" ]]; then
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+            echo "bucket=${{ vars.FE_BUCKET_STAGING }}" >> "$GITHUB_OUTPUT"
+            echo "distribution_id=${{ vars.FE_DIST_ID_STAGING }}" >> "$GITHUB_OUTPUT"
+            echo "api_url=https://api-staging.luminatherapyalliance.com/api/v1" >> "$GITHUB_OUTPUT"
+            echo "assess_url=https://ops-staging.luminatherapyalliance.com" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "bucket=${{ vars.FE_BUCKET_PRODUCTION }}" >> "$GITHUB_OUTPUT"
+            echo "distribution_id=${{ vars.FE_DIST_ID_PRODUCTION }}" >> "$GITHUB_OUTPUT"
+            echo "api_url=https://api.luminatherapyalliance.com/api/v1" >> "$GITHUB_OUTPUT"
+            echo "assess_url=https://ops.luminatherapyalliance.com" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_API_URL: ${{ steps.env.outputs.api_url }}
+          VITE_ASSESS_URL: ${{ steps.env.outputs.assess_url }}
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # One role per environment — staging assumes lumina-fe-staging-github-actions,
+          # prod assumes lumina-fe-production-github-actions.
+          role-to-assume: ${{ github.ref_name == 'master' && secrets.AWS_FE_DEPLOY_STAGING_ROLE_ARN || secrets.AWS_FE_DEPLOY_PRODUCTION_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload fingerprinted assets (long cache)
+        env:
+          BUCKET: ${{ steps.env.outputs.bucket }}
+        run: |
+          aws s3 sync dist/ s3://$BUCKET/ \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload index.html (no cache)
+        env:
+          BUCKET: ${{ steps.env.outputs.bucket }}
+        run: |
+          aws s3 cp dist/index.html s3://$BUCKET/index.html \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+
+      - name: Invalidate CloudFront
+        env:
+          DIST: ${{ steps.env.outputs.distribution_id }}
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id $DIST \
+            --paths "/index.html" \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "Waiting for invalidation $INVALIDATION_ID..."
+          aws cloudfront wait invalidation-completed \
+            --distribution-id $DIST \
+            --id $INVALIDATION_ID
+          echo "Deployment complete: ${{ steps.env.outputs.environment }}"
