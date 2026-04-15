@@ -7,7 +7,7 @@ environment     = "staging"
 aws_region      = "us-east-1"
 domain_name     = "luminatherapyalliance.com"
 fe_subdomain    = "ops-staging"
-route53_zone_id = "ZXXXXXXXXX" # Hosted zone ID for luminatherapyalliance.com
+route53_zone_id = "Z10211291EIC8UL5HV28K" # Hosted zone ID for luminatherapyalliance.com
 
 github_org  = "wtg-dev1"
 github_repo = "lumina-fe"

@@ -6,8 +6,13 @@
 # creating a duplicate — AWS allows only one provider per URL per account.
 # ------------------------------------------------------------------------------
 
-data "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
+# OIDC provider ARNs are deterministic given the account ID and issuer URL,
+# so we construct the ARN rather than calling iam:ListOpenIDConnectProviders
+# (which the terraform-admin user isn't entitled to).
+data "aws_caller_identity" "current" {}
+
+locals {
+  github_oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
 }
 
 resource "aws_iam_role" "fe_deploy" {
@@ -19,7 +24,7 @@ resource "aws_iam_role" "fe_deploy" {
       Effect = "Allow"
       Action = "sts:AssumeRoleWithWebIdentity"
       Principal = {
-        Federated = data.aws_iam_openid_connect_provider.github.arn
+        Federated = local.github_oidc_provider_arn
       }
       Condition = {
         StringEquals = {
