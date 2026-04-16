@@ -44,6 +44,8 @@ export default function UsersView() {
     password: '',
     password_confirmation: '',
     user_type: 'practice',
+    practice_id: '',
+    employer_id: '',
   })
   const [editForm, setEditForm] = useState({ username: '', email: '' })
   const [formError, setFormError] = useState('')
@@ -111,6 +113,8 @@ export default function UsersView() {
       password: '',
       password_confirmation: '',
       user_type: 'practice',
+      practice_id: '',
+      employer_id: '',
     })
     setModal({ mode: 'create' })
   }
@@ -130,14 +134,31 @@ export default function UsersView() {
       setFormError('Password confirmation must match password.')
       return
     }
+    if (createForm.user_type === 'practice' && !createForm.practice_id) {
+      setFormError('Select a practice for this user.')
+      return
+    }
+    if (createForm.user_type === 'employer' && !createForm.employer_id) {
+      setFormError('Select an employer for this user.')
+      return
+    }
+
+    const payload = {
+      username: createForm.username.trim(),
+      email: createForm.email.trim(),
+      password: createForm.password,
+      password_confirmation: createForm.password_confirmation,
+      user_type: createForm.user_type,
+    }
+    if (createForm.user_type === 'practice') {
+      payload.practice_id = createForm.practice_id
+    }
+    if (createForm.user_type === 'employer') {
+      payload.employer_id = createForm.employer_id
+    }
+
     try {
-      await api.users.create({
-        username: createForm.username.trim(),
-        email: createForm.email.trim(),
-        password: createForm.password,
-        password_confirmation: createForm.password_confirmation,
-        user_type: createForm.user_type,
-      })
+      await api.users.create(payload)
       setModal(null)
       await loadPage(1)
     } catch (e) {
@@ -177,6 +198,14 @@ export default function UsersView() {
 
   const card = { background: C.white, border: `1px solid ${C.border}`, borderRadius: 5 }
   const typeLabel = (t) => USER_TYPE_OPTIONS.find((o) => o.value === t)?.label || t
+
+  const practicesList = Array.isArray(org.practices) ? org.practices : []
+  const employersList = Array.isArray(org.employers) ? org.employers : []
+
+  const createOrgSatisfied =
+    createForm.user_type === 'admin'
+    || (createForm.user_type === 'practice' && Boolean(createForm.practice_id))
+    || (createForm.user_type === 'employer' && Boolean(createForm.employer_id))
 
   return (
     <div>
@@ -290,9 +319,39 @@ export default function UsersView() {
           <Sel
             label="User type"
             value={createForm.user_type}
-            onChange={(e) => setCreateForm((f) => ({ ...f, user_type: e.target.value }))}
+            onChange={(e) => {
+              const user_type = e.target.value
+              setCreateForm((f) => ({
+                ...f,
+                user_type,
+                practice_id: user_type === 'practice' ? f.practice_id : '',
+                employer_id: user_type === 'employer' ? f.employer_id : '',
+              }))
+            }}
             options={USER_TYPE_OPTIONS}
           />
+          {createForm.user_type === 'practice' && (
+            <Sel
+              label="Practice"
+              value={createForm.practice_id}
+              onChange={(e) => setCreateForm((f) => ({ ...f, practice_id: e.target.value }))}
+              options={[
+                { value: '', label: 'Select practice…' },
+                ...practicesList.map((p) => ({ value: p.id, label: p.name || p.id })),
+              ]}
+            />
+          )}
+          {createForm.user_type === 'employer' && (
+            <Sel
+              label="Employer"
+              value={createForm.employer_id}
+              onChange={(e) => setCreateForm((f) => ({ ...f, employer_id: e.target.value }))}
+              options={[
+                { value: '', label: 'Select employer…' },
+                ...employersList.map((em) => ({ value: em.id, label: em.name || em.id })),
+              ]}
+            />
+          )}
           <Inp
             label="Password"
             type="password"
@@ -312,6 +371,7 @@ export default function UsersView() {
               || !createForm.email.trim()
               || !createForm.password
               || !createForm.password_confirmation
+              || !createOrgSatisfied
             }
           >
             Create User
