@@ -17,10 +17,12 @@ import DashboardView      from './admin/DashboardView'
 import ReferralsView      from './admin/ReferralsView'
 import EmployersView      from './admin/EmployersView'
 import PracticesView      from './admin/PracticesView'
+import UsersView          from './admin/UsersView'
 import ClientsView        from './admin/ClientsView'
 import SessionsView       from './admin/SessionsView'
 import AssessmentsView    from './admin/AssessmentsView'
 import AssessmentSendView from './admin/AssessmentSendView'
+import InPersonAssessmentView from './admin/InPersonAssessmentView'
 import BankingView        from './admin/BankingView'
 import BillingView        from './admin/BillingView'
 import PayoutsView        from './admin/PayoutsView'
@@ -31,6 +33,8 @@ import PracticeSessionsView from './practice/PracticeSessionsView'
 import EmployerPortalView from './employer/EmployerPortalView'
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
+const ADMIN_USERS_PATH = '/ops/admin/users'
+
 const ADMIN_NAV = [
   { id:'dashboard',        l:'Dashboard',        path:'/ops/admin/dashboard' },
   { id:'referrals',        l:'Referrals ✦',      path:'/ops/admin/referrals' },
@@ -91,7 +95,10 @@ export default function OpsApp() {
   const currentPrac = isPractice ? safePractices.find(p => p.id === role) : null
   const currentEmp  = isEmployer ? safeEmployers.find(e => e.id === role) : null
 
-  const currentAdminNav = ADMIN_NAV.find((n) => location.pathname === n.path)
+  const currentAdminNav =
+    location.pathname === ADMIN_USERS_PATH
+      ? { l: 'Users' }
+      : ADMIN_NAV.find((n) => location.pathname === n.path)
   const currentPracticeNav = PRACTICE_NAV.find((n) => location.pathname === n.path)
   const navLabel = isPractice
     ? currentPrac?.name
@@ -187,6 +194,16 @@ export default function OpsApp() {
         )}
       </nav>
 
+      {isAdmin && (
+        <div style={{ padding:'10px 8px 12px', borderTop:'1px solid rgba(255,255,255,0.12)' }}>
+          <NavBtn
+            label="Users"
+            active={location.pathname === ADMIN_USERS_PATH}
+            onClick={() => handleNav(ADMIN_USERS_PATH)}
+          />
+        </div>
+      )}
+
       {/* Role switcher + logout */}
       <div style={{ padding:'12px 10px', borderTop:'1px solid rgba(255,255,255,0.12)' }}>
         <div style={{ fontSize:9, color:'#7ABCBC', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Switch View</div>
@@ -247,10 +264,12 @@ export default function OpsApp() {
             <Route path="/admin/referrals" element={isAdmin ? <ReferralsView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/employers" element={isAdmin ? <EmployersView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/practices" element={isAdmin ? <PracticesView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/users" element={isAdmin ? <UsersView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/clients" element={isAdmin ? <ClientsView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/sessions" element={isAdmin ? <SessionsView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/assessments" element={isAdmin ? <AssessmentsView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/send-assessments" element={isAdmin ? <AssessmentSendView /> : <Navigate to="/ops" replace />} />
+            <Route path="/admin/assessments/in-person/:id" element={isAdmin ? <InPersonAssessmentView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/banking" element={isAdmin ? <BankingView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/billing" element={isAdmin ? <BillingView /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/payouts" element={isAdmin ? <PayoutsView /> : <Navigate to="/ops" replace />} />
@@ -261,6 +280,7 @@ export default function OpsApp() {
             <Route path="/practice/sessions" element={isPractice ? <PracticeSessionsView practiceId={role} /> : <Navigate to="/ops" replace />} />
             <Route path="/practice/clients" element={isPractice ? <ClientsView practiceId={role} /> : <Navigate to="/ops" replace />} />
             <Route path="/practice/assessments" element={isPractice ? <AssessmentSendView practiceId={role} /> : <Navigate to="/ops" replace />} />
+            <Route path="/practice/assessments/in-person/:id" element={isPractice ? <InPersonAssessmentView practiceId={role} /> : <Navigate to="/ops" replace />} />
 
             <Route path="/employer/portal" element={isEmployer ? <EmployerPortalView employerId={role} /> : <Navigate to="/ops" replace />} />
             <Route path="*" element={<Navigate to="/ops" replace />} />

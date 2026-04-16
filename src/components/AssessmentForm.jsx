@@ -8,7 +8,15 @@ import { C, PHQ9_QUESTIONS, GAD7_QUESTIONS, FREQ_OPTIONS } from '../utils/consta
 import { phqSev, gadSev } from '../utils/helpers'
 import { Btn } from './ui'
 
-export default function AssessmentForm({ type, clientName, onSubmit, onCancel }) {
+export default function AssessmentForm({
+  type,
+  clientName,
+  onSubmit,
+  onCancel,
+  onAnswer,
+  submitting = false,
+  skipInternalConfirmation = false,
+}) {
   const questions = type === 'PHQ9' ? PHQ9_QUESTIONS : GAD7_QUESTIONS
   const [answers, setAnswers]   = useState(Array(questions.length).fill(null))
   const [submitted, setSubmitted] = useState(false)
@@ -24,7 +32,7 @@ export default function AssessmentForm({ type, clientName, onSubmit, onCancel })
     : 'Over the last 2 weeks, how often have you been bothered by the following problems?'
 
   const handleSubmit = () => {
-    setSubmitted(true)
+    if (!skipInternalConfirmation) setSubmitted(true)
     onSubmit(answers, totalScore)
   }
 
@@ -32,9 +40,22 @@ export default function AssessmentForm({ type, clientName, onSubmit, onCancel })
     const next = [...answers]
     next[qi] = val
     setAnswers(next)
+    if (typeof onAnswer === 'function') {
+      try { onAnswer({ index: qi, value: val, answered: next.filter(a => a !== null).length }) } catch {}
+    }
+    // Auto-scroll to the next unanswered question, if any.
+    const nextUnanswered = next.findIndex((a, idx) => a === null && idx > qi)
+    const target = nextUnanswered !== -1 ? nextUnanswered : next.findIndex((a) => a === null)
+    if (target !== -1 && target !== qi) {
+      setTimeout(() => {
+        try {
+          document.getElementById(`q${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        } catch {}
+      }, 120)
+    }
   }
 
-  if (submitted) {
+  if (submitted && !skipInternalConfirmation) {
     return (
       <div style={{ textAlign:'center', padding:'40px 20px' }}>
         <div style={{ fontSize:48, marginBottom:16 }}>✓</div>
@@ -127,10 +148,10 @@ export default function AssessmentForm({ type, clientName, onSubmit, onCancel })
       </div>
 
       <div style={{ display:'flex', gap:10 }}>
-        <Btn onClick={handleSubmit} disabled={!allAnswered}>
-          Submit {type==='PHQ9'?'PHQ-9':'GAD-7'}
+        <Btn onClick={handleSubmit} disabled={!allAnswered || submitting}>
+          {submitting ? 'Submitting…' : `Submit ${type==='PHQ9'?'PHQ-9':'GAD-7'}`}
         </Btn>
-        {onCancel && <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>}
+        {onCancel && <Btn variant="secondary" onClick={onCancel} disabled={submitting}>Cancel</Btn>}
       </div>
     </div>
   )

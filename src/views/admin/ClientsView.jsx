@@ -109,7 +109,7 @@ export default function ClientsView({ practiceId = null }) {
       )}
 
       <div style={card}>
-        <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background:C.cream }}>
               {[['Name'], ['Anon ID'], ['Employer'], ['Practice'], ['Email'], ['Phone'], ['Intake'], ['Status'], ['Assess.', true], ['Actions', true]].map(([h, r], i) => (
@@ -118,48 +118,56 @@ export default function ClientsView({ practiceId = null }) {
             </tr>
           </thead>
           <tbody>
-            {pagedClients.map((c, i) => {
-              const emp  = db.employers.find(e => e.id === c.employerId)
-              const prac = db.practices.find(p => p.id === c.practiceId)
-              const lastAssess = db.assessments
-                .filter(a => a.clientId === c.id)
-                .sort((a, b) => b.date.localeCompare(a.date))[0]
-              const daysSince  = lastAssess ? Math.floor((new Date() - new Date(lastAssess.date)) / (1000 * 60 * 60 * 24)) : null
-              const assessDue  = daysSince === null || daysSince >= 28
-              const nextStatus = c.status === 'active' ? 'discharged' : 'active'
+            {filteredClients.length === 0 ? (
+              <tr>
+                <td colSpan={10} style={{ ...TD(false), color: C.textMid, fontSize: 12 }}>
+                  {isPracticeRoute ? 'No clients assigned to this practice.' : 'No clients enrolled yet.'}
+                </td>
+              </tr>
+            ) : (
+              pagedClients.map((c, i) => {
+                const emp  = db.employers.find(e => e.id === c.employerId)
+                const prac = db.practices.find(p => p.id === c.practiceId)
+                const lastAssess = db.assessments
+                  .filter(a => a.clientId === c.id)
+                  .sort((a, b) => b.date.localeCompare(a.date))[0]
+                const daysSince  = lastAssess ? Math.floor((new Date() - new Date(lastAssess.date)) / (1000 * 60 * 60 * 24)) : null
+                const assessDue  = daysSince === null || daysSince >= 28
+                const nextStatus = c.status === 'active' ? 'discharged' : 'active'
 
-              return (
-                <tr key={c.id} style={{ background: i % 2 === 1 ? C.bgPage : C.white }}>
-                  <td style={{ ...TD(false), fontWeight:600 }}>{c.clientName || <span style={{ color:C.border }}>—</span>}</td>
-                  <td style={TD(false)}><span style={{ fontFamily:'monospace', color:C.teal, fontWeight:700, fontSize:11 }}>{c.anonId}</span></td>
-                  <td style={{ ...TD(false), fontSize:12 }}>{emp?.name}</td>
-                  <td style={{ ...TD(false), fontSize:12 }}>{prac?.name}</td>
-                  <td style={{ ...TD(false), fontSize:12 }}>{c.email || '—'}</td>
-                  <td style={{ ...TD(false), fontSize:12 }}>{c.phone || '—'}</td>
-                  <td style={{ ...TD(false), fontFamily:'monospace', fontSize:11, color:C.textMid }}>{c.intakeDate}</td>
-                  <td style={TD(false)}><Badge status={c.status}/></td>
-                  <td style={TD(true)}>
-                    <span style={{ fontSize:11, fontFamily:'monospace', color:assessDue ? '#D4721A' : C.tealGreen, fontWeight:700 }}>
-                      {assessDue ? 'DUE' : daysSince !== null ? `${daysSince}d ago` : '—'}
-                    </span>
-                  </td>
-                  <td style={TD(true)}>
-                    <Btn
-                      small
-                      variant="ghost"
-                      onClick={() => updateClientStatus(c.id, nextStatus)}
-                      disabled={statusLoadingClientId === c.id || submitLoading}
-                    >
-                      {statusLoadingClientId === c.id
-                        ? 'Saving...'
-                        : nextStatus === 'discharged'
-                          ? 'Discharge'
-                          : 'Set Active'}
-                    </Btn>
-                  </td>
-                </tr>
-              )
-            })}
+                return (
+                  <tr key={c.id} style={{ background: i % 2 === 1 ? C.bgPage : C.white }}>
+                    <td style={{ ...TD(false), fontWeight:600 }}>{c.clientName || <span style={{ color:C.border }}>—</span>}</td>
+                    <td style={TD(false)}><span style={{ fontFamily:'monospace', color:C.teal, fontWeight:700, fontSize:11 }}>{c.anonId}</span></td>
+                    <td style={TD(false)}>{emp?.name}</td>
+                    <td style={TD(false)}>{prac?.name}</td>
+                    <td style={TD(false)}>{c.email || '—'}</td>
+                    <td style={TD(false)}>{c.phone || '—'}</td>
+                    <td style={{ ...TD(false), fontFamily:'monospace', fontSize:11, color:C.textMid }}>{c.intakeDate}</td>
+                    <td style={TD(false)}><Badge status={c.status}/></td>
+                    <td style={TD(true)}>
+                      <span style={{ fontSize:11, fontFamily:'monospace', color:assessDue ? '#D4721A' : C.tealGreen, fontWeight:700 }}>
+                        {assessDue ? 'DUE' : daysSince !== null ? `${daysSince}d ago` : '—'}
+                      </span>
+                    </td>
+                    <td style={TD(true)}>
+                      <Btn
+                        small
+                        variant="ghost"
+                        onClick={() => updateClientStatus(c.id, nextStatus)}
+                        disabled={statusLoadingClientId === c.id || submitLoading}
+                      >
+                        {statusLoadingClientId === c.id
+                          ? 'Saving...'
+                          : nextStatus === 'discharged'
+                            ? 'Discharge'
+                            : 'Set Active'}
+                      </Btn>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
           </tbody>
         </table>
       </div>

@@ -11,7 +11,7 @@ export function PublicAssessmentStoreProvider({ children }) {
     setLoading(true)
     setError('')
     try {
-      return await api.assessments.getByToken(token)
+      return await api.assessments.publicGet(token)
     } catch (e) {
       setError(e?.message || 'This assessment link is invalid or has already been completed.')
       throw e
@@ -20,11 +20,11 @@ export function PublicAssessmentStoreProvider({ children }) {
     }
   }
 
-  const submitByToken = async (token, payload) => {
+  const submitByToken = async (token, { answers }) => {
     setLoading(true)
     setError('')
     try {
-      return await api.assessments.submitByToken(token, payload)
+      return await api.assessments.publicSubmit(token, { answers })
     } catch (e) {
       setError(e?.message || 'Failed to submit assessment. Please try again.')
       throw e

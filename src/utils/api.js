@@ -109,6 +109,15 @@ export const api = {
     resetPassword: (email)              => request('POST', '/auth/reset-password', { email }),
   },
 
+  // ── Users (admin; requires users:* permissions) ────────────────────────────
+  users: {
+    list:          (query)              => request('GET',  withQuery('/users', query)),
+    get:           (id)                 => request('GET',  `/users/${id}`),
+    create:        (data)               => request('POST', '/users', data),
+    update:        (id, data)           => request('PUT',  `/users/${id}`, data),
+    delete:        (id)                 => request('DELETE', `/users/${id}`),
+  },
+
   // ── Employers ───────────────────────────────────────────────────────────────
   employers: {
     list:          (query)              => request('GET',  withQuery('/employers', query)),
@@ -194,11 +203,14 @@ export const api = {
 
   // ── Assessments ──────────────────────────────────────────────────────────────
   assessments: {
-    listByClient:  (clientId)           => request('GET',  `/clients/${clientId}/assessments`),
-    sendLink:      (clientId, type)     => request('POST', '/assessments/send', { clientId, type }),
+    statuses:         ()                                => request('GET',  '/assessments/statuses'),
+    history:          (clientId, assessmentType)        => request('GET',  withQuery(`/assessments/clients/${clientId}/history`, { assessment_type: assessmentType })),
+    send:             ({ clientId, assessmentType })    => request('POST', '/assessments/send', { client_id: clientId, assessment_type: assessmentType }),
+    startInPerson:    ({ clientId, assessmentType })    => request('POST', '/assessments/in-person/start', { client_id: clientId, assessment_type: assessmentType }),
+    completeInPerson: (id, { answers })                 => request('POST', `/assessments/${id}/in-person/complete`, { answers }),
     // Public — no auth required (client submits via tokenized link)
-    getByToken:    (token)              => request('GET',  `/assessments/token/${token}`, null, { skipAuthRedirect: true }),
-    submitByToken: (token, data)        => request('POST', `/assessments/token/${token}`, data, { skipAuthRedirect: true }),
+    publicGet:        (token)                           => request('GET',  `/public/assessments/${token}`, null, { skipAuthRedirect: true }),
+    publicSubmit:     (token, { answers })              => request('POST', `/public/assessments/${token}/submit`, { answers }, { skipAuthRedirect: true }),
   },
 
   // ── Invoices ─────────────────────────────────────────────────────────────────

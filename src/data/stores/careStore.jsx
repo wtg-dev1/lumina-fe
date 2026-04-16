@@ -178,11 +178,58 @@ const mapUpdateReferralPayload = (payload = {}) => ({
   ...(payload.scheduledAt ? { scheduled_at: payload.scheduledAt } : {}),
 })
 
+const STATUS_TYPE_KEYS = [
+  { key: 'phq9', type: 'PHQ9' },
+  { key: 'gad7', type: 'GAD7' },
+]
+
+// Flatten the backend statuses response into a legacy-shape assessments array
+// so views that still iterate `care.assessments` (e.g. ClientsView rollups)
+// keep working without bulk fetching historical rows.
+const buildLegacyAssessmentsFromStatuses = (rows) => {
+  const out = []
+  rows.forEach((row) => {
+    const clientId = row?.client?.id
+    if (!clientId) return
+    STATUS_TYPE_KEYS.forEach(({ key, type }) => {
+      const s = row[key]
+      if (!s) return
+      if (s.last_completed_at) {
+        out.push({
+          id: `${clientId}:${type}:last`,
+          clientId,
+          type: s.assessment_type || type,
+          date: s.last_completed_at,
+          score: s.last_score ?? null,
+          severity: s.last_severity || '',
+          completed: true,
+        })
+      }
+      if (s.state === 'pending' && s.pending_sent_at) {
+        out.push({
+          id: `${clientId}:${type}:pending`,
+          clientId,
+          type: s.assessment_type || type,
+          date: s.pending_sent_at,
+          sentAt: s.pending_sent_at,
+          score: null,
+          completed: false,
+        })
+      }
+    })
+  })
+  return out
+}
+
 export function CareStoreProvider({ children }) {
   const [clients, setClients] = useState([])
   const [referrals, setReferrals] = useState([])
   const [sessions, setSessions] = useState([])
   const [assessments, setAssessments] = useState([])
+  const [assessmentStatuses, setAssessmentStatuses] = useState([])
+  const [statusesLoading, setStatusesLoading] = useState(false)
+  const [statusesError, setStatusesError] = useState('')
+  const [historyByClient, setHistoryByClient] = useState({})
   const [loading, setLoading] = useState(false)
   const [coreLoaded, setCoreLoaded] = useState(false)
   const [assessmentsLoaded, setAssessmentsLoaded] = useState(false)
@@ -196,7 +243,7 @@ export function CareStoreProvider({ children }) {
   const [referralsLoading, setReferralsLoading] = useState(false)
   const [referralsError, setReferralsError] = useState('')
   const coreInflightRef = useRef(null)
-  const assessmentsInflightRef = useRef(null)
+  const statusesInflightRef = useRef(null)
   const referralsPageInflightRef = useRef(null)
   const lastReferralsListQRef = useRef('')
 
@@ -291,31 +338,52 @@ export function CareStoreProvider({ children }) {
 
   const ensureCoreLoaded = useCallback((o) => ensureCoreLoadedRef.current(o), [])
 
-  const ensureAssessmentsLoadedRef = useRef(null)
-  ensureAssessmentsLoadedRef.current = async ({ force = false } = {}) => {
-    if (assessmentsLoaded && !force) return
-    if (assessmentsInflightRef.current && !force) return assessmentsInflightRef.current
+  const loadStatusesRef = useRef(null)
+  loadStatusesRef.current = async ({ force = false } = {}) => {
+    if (statusesInflightRef.current && !force) return statusesInflightRef.current
 
     const run = (async () => {
-      await ensureCoreLoaded({ force })
-      setLoading(true)
-      const sourceClients = Array.isArray(clients) && clients.length
-        ? clients
-        : await safe(() => fetchAllClients(), [])
-      const assessmentsNested = await Promise.all(
-        sourceClients.map((c) => safe(() => api.assessments.listByClient(c.id), []))
-      )
-      setAssessments(assessmentsNested.flatMap((chunk) => asArray(chunk)))
-      setAssessmentsLoaded(true)
-      setLoading(false)
+      setStatusesLoading(true)
+      setStatusesError('')
+      try {
+        const response = await api.assessments.statuses()
+        const rows = asArray(response)
+        setAssessmentStatuses(rows)
+        setAssessments(buildLegacyAssessmentsFromStatuses(rows))
+        setAssessmentsLoaded(true)
+        return rows
+      } catch (err) {
+        setStatusesError(err?.message || 'Failed to load assessment statuses.')
+        throw err
+      } finally {
+        setStatusesLoading(false)
+      }
     })()
 
-    assessmentsInflightRef.current = run
-    await run
-    assessmentsInflightRef.current = null
+    statusesInflightRef.current = run
+    try {
+      await run
+    } finally {
+      statusesInflightRef.current = null
+    }
   }
 
-  const ensureAssessmentsLoaded = useCallback((o) => ensureAssessmentsLoadedRef.current(o), [])
+  const loadStatuses = useCallback((o) => loadStatusesRef.current(o), [])
+
+  const ensureAssessmentsLoaded = useCallback(async ({ force = false } = {}) => {
+    if (assessmentsLoaded && !force) return
+    await safe(() => loadStatusesRef.current({ force }), null)
+  }, [assessmentsLoaded])
+
+  const loadHistory = useCallback(async (clientId, assessmentType, { force = false } = {}) => {
+    if (!clientId || !assessmentType) return []
+    const key = `${clientId}:${assessmentType}`
+    if (!force && Array.isArray(historyByClient[key])) return historyByClient[key]
+    const response = await api.assessments.history(clientId, assessmentType)
+    const rows = asArray(response)
+    setHistoryByClient((prev) => ({ ...prev, [key]: rows }))
+    return rows
+  }, [historyByClient])
 
   const ensureLoadedRef = useRef(null)
   ensureLoadedRef.current = async ({ force = false } = {}) => {
@@ -409,26 +477,36 @@ export function CareStoreProvider({ children }) {
     await ensureLoaded({ force: true })
   }
 
-  const sendAssessment = async ({ clientId, type }) => {
-    await api.assessments.sendLink(clientId, type)
-    await ensureLoaded({ force: true })
-    const pending = assessments.find((a) =>
-      a.clientId === clientId && a.type === type && a.completed === false && a.token
-    )
-    return pending?.token || null
+  const sendAssessment = async ({ clientId, assessmentType }) => {
+    const response = await api.assessments.send({ clientId, assessmentType })
+    await safe(() => loadStatusesRef.current({ force: true }), null)
+    return response
   }
 
-  const completeAssessment = async ({ token, clientId, type, answers, score }) => {
-    let t = token
-    if (!t) {
-      const pending = assessments.find((a) =>
-        a.clientId === clientId && a.type === type && a.completed === false && a.token
-      )
-      t = pending?.token
+  const startInPersonAssessment = async ({ clientId, assessmentType }) => {
+    const response = await api.assessments.startInPerson({ clientId, assessmentType })
+    await safe(() => loadStatusesRef.current({ force: true }), null)
+    return response
+  }
+
+  const completeInPersonAssessment = async (assessmentId, answers) => {
+    if (!assessmentId) throw new Error('Assessment id is required.')
+    const response = await api.assessments.completeInPerson(assessmentId, { answers })
+    await safe(() => loadStatusesRef.current({ force: true }), null)
+    // Invalidate any cached history for the relevant client so it refetches.
+    const row = assessmentStatuses.find((r) =>
+      r?.phq9?.assessment_type && (r?.client?.id && response?.client_id === r.client.id)
+    )
+    if (row?.client?.id && response?.assessment_type) {
+      const key = `${row.client.id}:${response.assessment_type}`
+      setHistoryByClient((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
     }
-    if (!t) throw new Error('Missing assessment token for completion')
-    await api.assessments.submitByToken(t, { answers, score, completedAt: new Date().toISOString() })
-    await ensureLoaded({ force: true })
+    return response
   }
 
   const value = useMemo(() => ({
@@ -440,12 +518,18 @@ export function CareStoreProvider({ children }) {
     referrals_error: referralsError,
     sessions,
     assessments,
+    assessmentStatuses,
+    statusesLoading,
+    statusesError,
+    historyByClient,
     loading,
     coreLoaded,
     assessmentsLoaded,
     ensureLoaded,
     ensureCoreLoaded,
     ensureAssessmentsLoaded,
+    loadStatuses,
+    loadHistory,
     load_referrals_page: loadReferralsPage,
     addClient,
     updateClientStatus,
@@ -457,7 +541,8 @@ export function CareStoreProvider({ children }) {
     addSession,
     deleteSession,
     sendAssessment,
-    completeAssessment,
+    startInPersonAssessment,
+    completeInPersonAssessment,
   }), [
     clients,
     referrals,
@@ -467,9 +552,15 @@ export function CareStoreProvider({ children }) {
     referralsError,
     sessions,
     assessments,
+    assessmentStatuses,
+    statusesLoading,
+    statusesError,
+    historyByClient,
     loading,
     coreLoaded,
     assessmentsLoaded,
+    loadStatuses,
+    loadHistory,
   ])
 
   return (

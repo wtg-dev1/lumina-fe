@@ -22,11 +22,11 @@ export const daysUntil = (dateStr) => {
 
 // ── Assessment Severity ───────────────────────────────────────────────────────
 export const phqSev = (s) => {
-  if (s <= 4)  return { l: 'Minimal',      c: '#1D9E75' }
-  if (s <= 9)  return { l: 'Mild',         c: '#E6A817' }
-  if (s <= 14) return { l: 'Moderate',     c: '#D4721A' }
-  if (s <= 19) return { l: 'Mod-Severe',   c: '#C0392B' }
-  return             { l: 'Severe',        c: '#922B21' }
+  if (s <= 4)  return { l: 'Minimal',           c: '#1D9E75' }
+  if (s <= 9)  return { l: 'Mild',              c: '#E6A817' }
+  if (s <= 14) return { l: 'Moderate',          c: '#D4721A' }
+  if (s <= 19) return { l: 'Moderately Severe', c: '#C0392B' }
+  return             { l: 'Severe',             c: '#922B21' }
 }
 
 export const gadSev = (s) => {
@@ -67,6 +67,27 @@ export const BADGE_STYLES = {
   pending:    { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
   active:     { bg: '#E6F4F1', color: '#1D6B6B', border: '#2A7F7F' },
   discharged: { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
+}
+
+// ── Assessments API error mapping ─────────────────────────────────────────────
+export const mapApiError = (err, ctx = {}) => {
+  switch (err?.status) {
+    case 400: return { kind: 'validation', message: err.message || 'Please check the form and try again.' }
+    case 403: return { kind: 'forbidden',  message: 'You do not have access to this.' }
+    case 404: return { kind: 'not_found',  message: ctx.notFound || 'Not found.' }
+    case 409: return { kind: 'conflict',   message: ctx.conflict || 'An assessment is already pending for this client.' }
+    case 410: return { kind: 'gone',       message: 'This link has expired or has already been used.' }
+    default:  return { kind: 'server',     message: err?.message || 'Something went wrong. Please try again.' }
+  }
+}
+
+// ── Assessment analytics (no PHI) ─────────────────────────────────────────────
+export const trackAssessmentEvent = (name, payload = {}) => {
+  try {
+    window.dispatchEvent(new CustomEvent('lumina:analytics', {
+      detail: { name, ...payload },
+    }))
+  } catch {}
 }
 
 // ── Next renewal date ─────────────────────────────────────────────────────────

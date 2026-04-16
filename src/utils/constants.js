@@ -69,6 +69,12 @@ export const FREQ_OPTIONS = [
   { value: 3, label: 'Nearly every day' },
 ]
 
+// ── Crisis resources (shown when show_crisis_resources=true or PHQ-9 >= 10) ───
+export const CRISIS_RESOURCES = {
+  lifeline: { name: '988 Suicide & Crisis Lifeline', contact: 'Call or text 988' },
+  textLine: { name: 'Crisis Text Line',             contact: 'Text HOME to 741741' },
+}
+
 export const PRESENTING_NEEDS = [
   'Anxiety','Depression','Couples / Relationship','Grief / Loss','Trauma / PTSD',
   'Work / Leadership Stress','Psychiatry / Medication','ADHD','Substance Use',
