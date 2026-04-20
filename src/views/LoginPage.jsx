@@ -2,7 +2,13 @@
  * Login Page
  *
  * In production: POST to /api/v1/auth/login with email + password.
- * On success: store JWT, redirect to / with role from JWT claims.
+ * On success: store JWT, persist role + session lock, sync UI shell, redirect to /ops.
+ *
+ * Expected JSON (field names may vary; parser accepts common aliases):
+ * - token (or jwt / data.token)
+ * - role or user_type / user_role: "admin" | "practice" | "employer"
+ * - practice_id (practice users) — UUID
+ * - employer_id (employer users) — UUID
  *
  * Demo credentials (replace with real auth):
  *   admin@luminatherapyalliance.com  / any password → admin
@@ -16,9 +22,19 @@ import { useNavigate } from 'react-router-dom'
 import { C } from '../utils/constants'
 import { Inp, Btn } from '../components/ui'
 import api, { setToken } from '../utils/api'
+import { SESSION_LOCK, useUiShellStore } from '../data/stores'
+
+function pick(res, ...keys) {
+  for (const k of keys) {
+    if (res && res[k] !== undefined && res[k] !== null && res[k] !== '') return res[k]
+    if (res?.data && res.data[k] !== undefined && res.data[k] !== null && res.data[k] !== '') return res.data[k]
+  }
+  return ''
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { applyPostLogin } = useUiShellStore()
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]     = useState('')
@@ -31,13 +47,38 @@ export default function LoginPage() {
 
     try {
       const res = await api.auth.login(email, password)
-      const token = res?.token || res?.jwt || res?.data?.token
-      const role = res?.role || res?.userRole || res?.data?.role
+      const token = pick(res, 'token', 'jwt') || res?.data?.token
+      const rawRole = String(
+        pick(res, 'role', 'user_role', 'userRole', 'user_type', 'userType') || ''
+      ).trim().toLowerCase()
+      const practiceId = String(pick(res, 'practice_id', 'practiceId') || '').trim()
+      const employerId = String(pick(res, 'employer_id', 'employerId') || '').trim()
 
-      if (!token || !role) throw new Error('Login response missing token or role.')
+      if (!token) throw new Error('Login response missing token.')
+
+      let luminaRole = 'admin'
+      let sessionLock = SESSION_LOCK.MULTI
+
+      let kind = ['admin', 'practice', 'employer'].includes(rawRole) ? rawRole : null
+      if (!kind && practiceId && !employerId) kind = 'practice'
+      if (!kind && employerId && !practiceId) kind = 'employer'
+      if (!kind) throw new Error('Login response missing or invalid role (expected admin, practice, or employer).')
+
+      if (kind === 'admin') {
+        luminaRole = 'admin'
+        sessionLock = SESSION_LOCK.MULTI
+      } else if (kind === 'practice') {
+        if (!practiceId) throw new Error('Login response missing practice_id for practice users.')
+        luminaRole = practiceId
+        sessionLock = SESSION_LOCK.PRACTICE
+      } else {
+        if (!employerId) throw new Error('Login response missing employer_id for employer users.')
+        luminaRole = employerId
+        sessionLock = SESSION_LOCK.EMPLOYER
+      }
 
       setToken(token)
-      localStorage.setItem('lumina_role', role)
+      applyPostLogin({ role: luminaRole, sessionLock })
       navigate('/ops')
     } catch (err) {
       setError(err?.message || 'Login failed. Check credentials and try again.')

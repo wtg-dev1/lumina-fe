@@ -107,16 +107,7 @@ See `Lumina_Developer_Handoff.docx` for the complete technical spec.
 
 ### Authentication
 
-Replace the demo login in `LoginPage.jsx`:
-```js
-// Replace this:
-const role = DEMO_ROLES[email]
-
-// With this:
-const res = await api.auth.login(email, password)
-setToken(res.token)          // stores JWT in localStorage
-localStorage.setItem('lumina_role', res.role)  // role from JWT claims
-```
+Replace the demo login in `LoginPage.jsx` (see current implementation): on success the app stores the JWT, **`lumina_role`** (either `admin` or an org UUID for portal routes), and **`lumina_session_lock`** (`multi` for Lumina admins who can use Switch View, or `practice` / `employer` for locked portal-only sessions). The login JSON should include `role` or `user_type` (`admin` | `practice` | `employer`) and, for org users, `practice_id` or `employer_id` as UUIDs.
 
 ### Assessment email/SMS
 

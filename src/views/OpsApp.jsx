@@ -10,6 +10,7 @@ import {
   useAuthStore,
   useOrgStore,
   useUiShellStore,
+  SESSION_LOCK,
 } from '../data/stores'
 
 // ── View imports ──────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ function useIsMobile() {
 export default function OpsApp() {
   const { isAuthenticated, logout } = useAuthStore()
   const { employers, practices, summaryLoaded, ensureSummaryLoaded } = useOrgStore()
-  const { role, navOpen, setNavOpen, switchRole } = useUiShellStore()
+  const { role, sessionLock, navOpen, setNavOpen, switchRole } = useUiShellStore()
   const navigate  = useNavigate()
   const location = useLocation()
   const isMobile  = useIsMobile()
@@ -91,6 +92,17 @@ export default function OpsApp() {
   const isAdmin = roleKind === 'admin'
   const isPractice = roleKind === 'practice'
   const isEmployer = roleKind === 'employer'
+
+  const showSwitchView = sessionLock === SESSION_LOCK.MULTI
+
+  const defaultOpsEntry = useMemo(() => {
+    if (sessionLock === SESSION_LOCK.PRACTICE) return '/ops/practice/portal'
+    if (sessionLock === SESSION_LOCK.EMPLOYER) return '/ops/employer/portal'
+    if (role === 'admin') return '/ops/admin/dashboard'
+    if (safeEmployers.some((e) => e.id === role)) return '/ops/employer/portal'
+    if (safePractices.some((p) => p.id === role)) return '/ops/practice/portal'
+    return '/ops/practice/portal'
+  }, [sessionLock, role, safeEmployers, safePractices])
 
   const currentPrac = isPractice ? safePractices.find(p => p.id === role) : null
   const currentEmp  = isEmployer ? safeEmployers.find(e => e.id === role) : null
@@ -132,8 +144,23 @@ export default function OpsApp() {
   }, [ensureSummaryLoaded])
 
   useEffect(() => {
+    if (!isAuthenticated) return
+    if (sessionLock) return
+    logout()
+    navigate('/login', { replace: true })
+  }, [isAuthenticated, sessionLock, logout, navigate])
+
+  useEffect(() => {
     if (!location.pathname.startsWith('/ops')) return
     if (location.pathname !== '/ops') return
+    if (sessionLock === SESSION_LOCK.PRACTICE) {
+      navigate('/ops/practice/portal', { replace: true })
+      return
+    }
+    if (sessionLock === SESSION_LOCK.EMPLOYER) {
+      navigate('/ops/employer/portal', { replace: true })
+      return
+    }
     if (role === 'admin') {
       navigate('/ops/admin/dashboard', { replace: true })
       return
@@ -146,7 +173,7 @@ export default function OpsApp() {
     if (safePractices.some((p) => p.id === role) || role !== 'admin') {
       navigate('/ops/practice/portal', { replace: true })
     }
-  }, [location.pathname, role, summaryLoaded, safeEmployers, safePractices, navigate])
+  }, [location.pathname, role, sessionLock, summaryLoaded, safeEmployers, safePractices, navigate])
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
@@ -204,22 +231,26 @@ export default function OpsApp() {
         </div>
       )}
 
-      {/* Role switcher + logout */}
+      {/* Role switcher (multi-session admin only) + logout */}
       <div style={{ padding:'12px 10px', borderTop:'1px solid rgba(255,255,255,0.12)' }}>
-        <div style={{ fontSize:9, color:'#7ABCBC', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Switch View</div>
-        <select value={role} onChange={e => handleRole(e.target.value)}
-          style={{ width:'100%', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:4, padding:'7px 8px', fontSize:11, color:C.white, fontFamily:'Arial,sans-serif', cursor:'pointer', outline:'none' }}>
-          <option value="admin">🔑 Lumina Admin</option>
-          <optgroup label="── Practices ──">
-            {safePractices.map(p => <option key={p.id} value={p.id}>🏥 {p.name.length>24?p.name.slice(0,24)+'…':p.name}</option>)}
-          </optgroup>
-          <optgroup label="── Employers ──">
-            {safeEmployers.map(e => <option key={e.id} value={e.id}>🏢 {e.name.length>24?e.name.slice(0,24)+'…':e.name}</option>)}
-          </optgroup>
-        </select>
-        {isPractice  && <div style={{ fontSize:10, color:'#A8D5D5', marginTop:5 }}>{currentPrac?.city}</div>}
-        {isEmployer  && <div style={{ fontSize:10, color:'#A8D5D5', marginTop:5 }}>Employer Portal</div>}
-        {isAdmin     && <div style={{ fontSize:10, color:'#7ABCBC', marginTop:5 }}>Daniel Selling, Psy.D.</div>}
+        {showSwitchView && (
+          <>
+            <div style={{ fontSize:9, color:'#7ABCBC', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Switch View</div>
+            <select value={role} onChange={e => handleRole(e.target.value)}
+              style={{ width:'100%', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:4, padding:'7px 8px', fontSize:11, color:C.white, fontFamily:'Arial,sans-serif', cursor:'pointer', outline:'none' }}>
+              <option value="admin">🔑 Lumina Admin</option>
+              <optgroup label="── Practices ──">
+                {safePractices.map(p => <option key={p.id} value={p.id}>🏥 {p.name.length>24?p.name.slice(0,24)+'…':p.name}</option>)}
+              </optgroup>
+              <optgroup label="── Employers ──">
+                {safeEmployers.map(e => <option key={e.id} value={e.id}>🏢 {e.name.length>24?e.name.slice(0,24)+'…':e.name}</option>)}
+              </optgroup>
+            </select>
+          </>
+        )}
+        {isPractice  && <div style={{ fontSize:10, color:'#A8D5D5', marginTop: showSwitchView ? 5 : 0 }}>{currentPrac?.city}</div>}
+        {isEmployer  && <div style={{ fontSize:10, color:'#A8D5D5', marginTop: showSwitchView ? 5 : 0 }}>Employer Portal</div>}
+        {isAdmin     && <div style={{ fontSize:10, color:'#7ABCBC', marginTop: showSwitchView ? 5 : 0 }}>Daniel Selling, Psy.D.</div>}
         <button onClick={handleLogout} style={{ marginTop:8, width:'100%', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:4, padding:'6px', fontSize:11, color:'#A8D5D5', cursor:'pointer', fontFamily:'Arial,sans-serif' }}>
           Sign Out
         </button>
@@ -258,7 +289,7 @@ export default function OpsApp() {
         {/* Content */}
         <div style={{ maxWidth:1100, margin:'0 auto', padding:isMobile?'16px 12px':'26px 26px' }}>
           <Routes>
-            <Route path="/" element={<Navigate to={role === 'admin' ? '/ops/admin/dashboard' : '/ops/practice/portal'} replace />} />
+            <Route path="/" element={<Navigate to={defaultOpsEntry} replace />} />
 
             <Route path="/admin/dashboard" element={isAdmin ? <DashboardView onNavigate={navigate} /> : <Navigate to="/ops" replace />} />
             <Route path="/admin/referrals" element={isAdmin ? <ReferralsView /> : <Navigate to="/ops" replace />} />

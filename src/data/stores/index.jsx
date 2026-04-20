@@ -1,6 +1,6 @@
 import React from 'react'
 import { AuthStoreProvider, useAuthStore } from './authStore'
-import { UiShellStoreProvider, useUiShellStore } from './uiShellStore'
+import { UiShellStoreProvider, useUiShellStore, SESSION_LOCK } from './uiShellStore'
 import { OrgStoreProvider, useOrgStore } from './orgStore'
 import { CareStoreProvider, useCareStore } from './careStore'
 import { FinanceStoreProvider, useFinanceStore } from './financeStore'
@@ -27,6 +27,7 @@ export function OpsStoresProvider({ children }) {
 export {
   useAuthStore,
   useUiShellStore,
+  SESSION_LOCK,
   useOrgStore,
   useCareStore,
   useFinanceStore,

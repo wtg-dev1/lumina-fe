@@ -15,6 +15,10 @@ export function AuthStoreProvider({ children }) {
   const logout = () => {
     clearToken()
     localStorage.removeItem('lumina_role')
+    localStorage.removeItem('lumina_session_lock')
+    try {
+      window.dispatchEvent(new CustomEvent('lumina:logout'))
+    } catch {}
   }
 
   const value = useMemo(() => ({
