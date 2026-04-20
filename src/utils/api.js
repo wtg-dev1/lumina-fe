@@ -104,9 +104,10 @@ const request = async (method, path, body, options = {}) => {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const api = {
   auth: {
-    login:         (email, password)    => request('POST', '/auth/login', { email, password }, { skipAuthRedirect: true }),
-    logout:        ()                   => request('POST', '/auth/logout'),
-    resetPassword: (email)              => request('POST', '/auth/reset-password', { email }),
+    login:          (email, password)        => request('POST', '/auth/login', { email, password }, { skipAuthRedirect: true }),
+    logout:         ()                       => request('POST', '/auth/logout'),
+    forgotPassword: (email)                  => request('POST', '/auth/forgot-password', { email }, { skipAuthRedirect: true }),
+    resetPassword:  (token, newPassword)     => request('POST', '/auth/reset-password', { token, new_password: newPassword }, { skipAuthRedirect: true }),
   },
 
   // ── Users (admin; requires users:* permissions) ────────────────────────────

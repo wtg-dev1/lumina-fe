@@ -18,7 +18,7 @@
  */
 
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { C } from '../utils/constants'
 import { Inp, Btn } from '../components/ui'
 import api, { setToken } from '../utils/api'
@@ -112,7 +112,13 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign In'}
           </Btn>
 
-          <div style={{ marginTop:16, fontSize:11, color:C.textMid, lineHeight:1.7 }}>
+          <div style={{ marginTop:14, textAlign:'right' }}>
+            <Link to="/forgot-password" style={{ fontSize:12, color:C.teal, textDecoration:'none', fontWeight:600 }}>
+              Forgot password?
+            </Link>
+          </div>
+
+          <div style={{ marginTop:12, fontSize:11, color:C.textMid, lineHeight:1.7 }}>
             Sign in with your Lumina account credentials.
           </div>
         </form>

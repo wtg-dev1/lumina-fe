@@ -14,6 +14,8 @@ import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-do
 import { OpsStoresProvider } from './data/stores'
 import OpsApp from './views/OpsApp'
 import LoginPage from './views/LoginPage'
+import ForgotPasswordPage from './views/ForgotPasswordPage'
+import ResetPasswordPage from './views/ResetPasswordPage'
 import AssessPage from './views/AssessPage'
 
 function LegacyAssessRedirect() {
@@ -31,6 +33,8 @@ export default function App() {
         <Route path="/assess/:token"      element={<LegacyAssessRedirect />} />
         <Route path="/assess"             element={<AssessPage />} />
         <Route path="/login"              element={<LoginPage />} />
+        <Route path="/forgot-password"    element={<ForgotPasswordPage />} />
+        <Route path="/reset-password"     element={<ResetPasswordPage />} />
 
         {/* Protected — ops platform */}
         <Route path="/" element={<Navigate to="/ops" replace />} />
