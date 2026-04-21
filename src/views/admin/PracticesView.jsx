@@ -77,7 +77,7 @@ export default function PracticesView() {
   const [rModal, setRModal] = useState(null)  // practiceId for set-rates modal
   const [clModal, setClModal] = useState(null) // { mode, practiceId, clinician }
   const [form, setForm]     = useState({ name:'', contact:'', email:'', city:'' })
-  const [cForm, setCForm]   = useState({ employer_id:'', type:'per_employee', rate_cents:'', units:'', margin_percent:'20', effective_date:'' })
+  const [cForm, setCForm]   = useState({ employer_id:'', type:'per_employee', billing_model:'pay_as_you_go', rate_cents:'', units:'', margin_percent:'20', effective_date:'' })
   const [rForm, setRForm]   = useState({ rateIndividual:'', rateCouple:'', ratePsychiatry:'' })
   const [clForm, setClForm] = useState({ name:'', credential:'', specialty:'', active:'true' })
 
@@ -192,20 +192,37 @@ export default function PracticesView() {
       per_psychiatry_block: `$${cForm.rate_cents}/mo per 2-session block`,
     }
     setContractError('')
+    if (cForm.billing_model === 'pre_paid_package' && !cForm.units) {
+      setContractError('Units is required for pre-paid package contracts.')
+      return
+    }
+    if (cForm.billing_model === 'pay_as_you_go' && cForm.units) {
+      setContractError('Units must not be set for pay-as-you-go contracts.')
+      return
+    }
     try {
       await org.addContract({
-      practice_id: cModal,
-      employer_id: cForm.employer_id,
-      type:       cForm.type,
-      rate_cents: parseInt(cForm.rate_cents, 10) * 100,
-      units:      parseInt(cForm.units, 10),
-      margin_percent: parseInt(cForm.margin_percent, 10),
-      label:      labels[cForm.type],
-      effective_date: cForm.effective_date,
-    })
-    setCModal(null)
+        practice_id: cModal,
+        employer_id: cForm.employer_id,
+        type: cForm.type,
+        billing_model: cForm.billing_model,
+        rate_cents: parseInt(cForm.rate_cents, 10) * 100,
+        ...(cForm.billing_model === 'pre_paid_package'
+          ? { units: parseInt(cForm.units, 10) }
+          : {}),
+        margin_percent: parseInt(cForm.margin_percent, 10),
+        label: labels[cForm.type],
+        effective_date: cForm.effective_date,
+      })
+      setCModal(null)
     } catch (e) {
-      setContractError(e?.message || 'Failed to add contract.')
+      const msg = e?.message || ''
+      if (msg.includes('units is required') || msg.includes("'Units' failed on the 'required_if'"))
+        setContractError('Units is required for pre-paid package contracts.')
+      else if (msg.includes('units must be null') || msg.includes("'Units' failed on the 'excluded_if'"))
+        setContractError('Units must not be set for pay-as-you-go contracts.')
+      else
+        setContractError(msg || 'Failed to add contract.')
     }
   }
 
@@ -331,7 +348,14 @@ export default function PracticesView() {
                   {contracts.map(c => (
                     <div key={c.id} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:C.textMid, marginBottom:3 }}>
                       <span>{db.employers.find(e => e.id === (c.employer_id || c.employerId))?.name}</span>
-                      <span style={{ fontFamily:'monospace', color:C.textDark }}>{c.label} · {c.units} units · {c.margin_percent || c.margin}% margin</span>
+                      <span style={{ fontFamily:'monospace', color:C.textDark }}>
+                        {c.label}
+                        {' · '}
+                        {c.billing_model === 'pre_paid_package'
+                          ? `pre-paid · ${c.units} units`
+                          : 'pay-as-you-go'}
+                        {` · ${c.margin_percent || c.margin}% margin`}
+                      </span>
                       <span style={{display:'flex',gap:6}}>
                         <Btn variant="ghost" small onClick={async () => {
                           setApiError('')
@@ -409,8 +433,16 @@ export default function PracticesView() {
               { value:'per_couple',           label:'Per Couple / Month' },
               { value:'per_psychiatry_block', label:'Per Psychiatry Block / Month' },
             ]}/>
+          <Sel label="Billing Model" value={cForm.billing_model}
+            onChange={e => setCForm(f => ({ ...f, billing_model: e.target.value, units: '' }))}
+            options={[
+              { value: 'pay_as_you_go',    label: 'Pay-as-you-go' },
+              { value: 'pre_paid_package', label: 'Pre-paid package' },
+            ]}/>
           <Inp label="Rate ($)"          type="number" value={cForm.rate_cents}   onChange={e => setCForm(f => ({ ...f, rate_cents:e.target.value }))}   placeholder="1000"/>
-          <Inp label="Units"             type="number" value={cForm.units}  onChange={e => setCForm(f => ({ ...f, units:e.target.value }))}  placeholder="5"/>
+          {cForm.billing_model === 'pre_paid_package' && (
+            <Inp label="Units" type="number" min="1" value={cForm.units} onChange={e => setCForm(f => ({ ...f, units:e.target.value }))} placeholder="12"/>
+          )}
           <Inp label="Lumina Margin (%)" type="number" value={cForm.margin_percent} onChange={e => setCForm(f => ({ ...f, margin_percent:e.target.value }))} placeholder="20"/>
           <Inp label="Effective Date" type="date" value={cForm.effective_date} onChange={e => setCForm(f => ({ ...f, effective_date:e.target.value }))}/>
           <Btn onClick={addContract} disabled={!cForm.employer_id || !cForm.rate_cents || !cForm.effective_date}>Add Contract</Btn>

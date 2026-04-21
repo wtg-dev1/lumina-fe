@@ -20,6 +20,9 @@ export const daysUntil = (dateStr) => {
   return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24))
 }
 
+export const monthLabel = (iso) =>
+  iso ? new Date(iso).toISOString().slice(0, 7) : '—'
+
 // ── Assessment Severity ───────────────────────────────────────────────────────
 export const phqSev = (s) => {
   if (s <= 4)  return { l: 'Minimal',           c: '#1D9E75' }
@@ -59,14 +62,18 @@ export const genToken = (clientId, type) =>
 
 // ── Badge status colors ───────────────────────────────────────────────────────
 export const BADGE_STYLES = {
-  paid:       { bg: '#E6F4F1', color: '#1D6B6B', border: '#2A7F7F' },
-  sent:       { bg: '#E8F0F7', color: '#1F4D78', border: '#2E74B5' },
-  draft:      { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
-  overdue:    { bg: '#FCE8E8', color: '#B03A3A', border: '#D9534F' },
-  processing: { bg: '#FFF3E0', color: '#8B5E00', border: '#F0A500' },
-  pending:    { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
-  active:     { bg: '#E6F4F1', color: '#1D6B6B', border: '#2A7F7F' },
-  discharged: { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
+  paid:           { bg: '#E6F4F1', color: '#1D6B6B', border: '#2A7F7F' },
+  sent:           { bg: '#E8F0F7', color: '#1F4D78', border: '#2E74B5' },
+  draft:          { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
+  overdue:        { bg: '#FCE8E8', color: '#B03A3A', border: '#D9534F' },
+  processing:     { bg: '#FFF3E0', color: '#8B5E00', border: '#F0A500' },
+  pending:        { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
+  active:         { bg: '#E6F4F1', color: '#1D6B6B', border: '#2A7F7F' },
+  discharged:     { bg: '#F5F0E8', color: '#666666', border: '#D5CFC4' },
+  finalized:      { bg: '#E8F0F7', color: '#1F4D78', border: '#2E74B5' },
+  payment_failed: { bg: '#FCE8E8', color: '#B03A3A', border: '#D9534F' },
+  voided:         { bg: '#EDEDED', color: '#666666', border: '#BDBDBD' },
+  uncollectible:  { bg: '#EDEDED', color: '#666666', border: '#BDBDBD' },
 }
 
 // ── Assessments API error mapping ─────────────────────────────────────────────

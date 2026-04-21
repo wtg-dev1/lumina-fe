@@ -82,7 +82,6 @@ export default function EmployersView() {
     contact_name: '',
     contact_email: '',
     billing_method: 'invoice',
-    stripe_customer_id: '',
     admin_fee_cents: '',
     admin_fee_anchor_month: '1',
     active: true,
@@ -116,7 +115,6 @@ export default function EmployersView() {
         contact_name: feeForm.contact_name,
         contact_email: feeForm.contact_email,
         billing_method: feeForm.billing_method,
-        stripe_customer_id: feeForm.stripe_customer_id,
         admin_fee_cents: parseInt(feeForm.admin_fee_cents, 10) * 100,
         admin_fee_anchor_month: parseInt(feeForm.admin_fee_anchor_month, 10),
         active: feeForm.active,
@@ -218,7 +216,7 @@ export default function EmployersView() {
       {db.employers.map(emp=>{
         const contracts    = db.contracts.filter(c=>(c.employer_id || c.employerId)===emp.id&&c.active)
         const sessions     = db.sessions.filter(s=>(s.employer_id || s.employerId)===emp.id).length
-        const revenue      = db.invoices.filter(i=>(i.employer_id || i.employerId)===emp.id&&i.status==='paid').reduce((s,i)=>s+i.totalCents,0)
+        const revenue      = db.invoices.filter(i=>i.employer_id===emp.id&&i.status==='paid').reduce((s,i)=>s+(i.total_cents||0),0)
         const empAdminFees = (db.adminFees||[]).filter(f=>(f.employer_id || f.employerId)===emp.id).sort((a,b)=>(b.invoice_date || b.invoiceDate || '').localeCompare(a.invoice_date || a.invoiceDate || ''))
         const totalAdminPaid = empAdminFees.filter(f=>f.status==='paid').reduce((s,f)=>s+(f.fee_cents || f.feeCents),0)
         const renewal = nextRenewal(emp.admin_fee_anchor_month)
@@ -257,7 +255,6 @@ export default function EmployersView() {
                     contact_name: emp.contact_name || '',
                     contact_email: emp.contact_email || '',
                     billing_method: emp.billing_method || 'invoice',
-                    stripe_customer_id: emp.stripe_customer_id || '',
                     admin_fee_cents: String((emp.admin_fee_cents || 0) / 100),
                     admin_fee_anchor_month: String(emp.admin_fee_anchor_month || 1),
                     active: emp.active !== false,
@@ -362,7 +359,6 @@ export default function EmployersView() {
       <Inp label="Contact Email" type="email" value={feeForm.contact_email} onChange={e=>setFeeForm(f=>({...f,contact_email:e.target.value}))}/>
       <Sel label="Session Billing Method" value={feeForm.billing_method} onChange={e=>setFeeForm(f=>({...f,billing_method:e.target.value}))}
         options={[{value:'invoice',label:'Invoice (manual)'},{value:'ach',label:'ACH Auto-charge (Stripe)'}]}/>
-      <Inp label="Stripe Customer ID" value={feeForm.stripe_customer_id} onChange={e=>setFeeForm(f=>({...f,stripe_customer_id:e.target.value}))} placeholder="cus_123"/>
       <Sel label="Status" value={feeForm.active ? 'true' : 'false'} onChange={e=>setFeeForm(f=>({...f,active:e.target.value==='true'}))}
         options={[{value:'true',label:'Active'},{value:'false',label:'Inactive'}]}/>
       <Inp label="Annual Admin Fee ($)" type="number" value={feeForm.admin_fee_cents} onChange={e=>setFeeForm(f=>({...f,admin_fee_cents:e.target.value}))} placeholder="5000"/>

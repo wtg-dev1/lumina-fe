@@ -32,7 +32,6 @@ const toEmployer = (row = {}) => ({
   contact_name: row.contact_name ?? row.contact ?? '',
   contact_email: row.contact_email ?? row.email ?? '',
   billing_method: row.billing_method ?? row.billing ?? 'invoice',
-  stripe_customer_id: row.stripe_customer_id ?? row.stripeCustomerId ?? '',
   admin_fee_cents: row.admin_fee_cents ?? row.adminFeeCents ?? 0,
   admin_fee_anchor_month: row.admin_fee_anchor_month ?? row.adminFeeAnchorMonth ?? null,
   active: row.active !== false,
@@ -78,15 +77,18 @@ const toContract = (row = {}) => ({
   practice_id: row.practice_id ?? row.practiceId ?? '',
   employer_id: row.employer_id ?? row.employerId ?? '',
   type: row.type,
+  billing_model: row.billing_model ?? row.billingModel ?? '',
   rate_cents: row.rate_cents ?? row.rate ?? 0,
-  units: row.units ?? 0,
+  units: row.units ?? null,
   margin_percent: row.margin_percent ?? row.margin ?? 0,
   label: row.label ?? '',
   effective_date: row.effective_date ?? row.effectiveDate ?? '',
   active: row.active !== false,
+  created_at: row.created_at ?? row.createdAt ?? '',
   // Compatibility aliases
   practiceId: row.practiceId ?? row.practice_id ?? '',
   employerId: row.employerId ?? row.employer_id ?? '',
+  billingModel: row.billingModel ?? row.billing_model ?? '',
   rate: row.rate ?? row.rate_cents ?? 0,
   margin: row.margin ?? row.margin_percent ?? 0,
   effectiveDate: row.effectiveDate ?? row.effective_date ?? '',
@@ -508,7 +510,7 @@ export function OrgStoreProvider({ children }) {
 
   const addContract = async (payload) => {
     const { practice_id, ...contract } = payload || {}
-    await api.contracts.create(practice_id, contract)
+    await api.contracts.create(practice_id, { practice_id, ...contract })
     await ensureLoaded({ force: true })
     await loadPracticesPage({
       page: practicesPagination.page,
@@ -559,7 +561,7 @@ export function OrgStoreProvider({ children }) {
   }
 
   const updateContract = async ({ practice_id, id, ...payload }) => {
-    await api.contracts.update(practice_id, id, payload)
+    await api.contracts.update(practice_id, id, { practice_id, ...payload })
     await ensureLoaded({ force: true })
     await loadPracticesPage({
       page: practicesPagination.page,

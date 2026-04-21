@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { C } from '../../utils/constants'
-import { fmt, phqSev, gadSev } from '../../utils/helpers'
+import { fmt, phqSev, gadSev, monthLabel } from '../../utils/helpers'
 import { useCareStore, useFinanceStore, useOrgStore } from '../../data/stores'
 import { Badge } from '../../components/ui'
 import { TH, TD } from '../../components/ui'
@@ -38,7 +38,9 @@ export default function EmployerPortalView({ employerId }) {
   const emp = db.employers.find(e => e.id === employerId)
   if (!emp) return <div style={{ color:C.textMid, padding:20 }}>Employer not found.</div>
 
-  const sessionInvoices = db.invoices.filter(i => i.employerId === employerId).sort((a, b) => b.period.localeCompare(a.period))
+  const sessionInvoices = db.invoices
+    .filter(i => i.employer_id === employerId && i.kind !== 'admin_fee_annual')
+    .sort((a, b) => (b.period_start || '').localeCompare(a.period_start || ''))
   const adminFeeInvs    = (db.adminFees || []).filter(f => f.employerId === employerId).sort((a, b) => b.invoiceDate.localeCompare(a.invoiceDate))
   const empClients      = db.clients.filter(c => c.employerId === employerId)
   const empSessions     = db.sessions.filter(s => s.employerId === employerId)
@@ -46,8 +48,12 @@ export default function EmployerPortalView({ employerId }) {
     empClients.some(c => c.id === a.clientId) && a.completed === true && a.score !== null && a.score !== undefined
   )
 
-  const totalOwed = [...sessionInvoices, ...adminFeeInvs].filter(i => ['sent', 'overdue'].includes(i.status)).reduce((s, i) => s + (i.totalCents || i.feeCents || 0), 0)
-  const totalPaid = [...sessionInvoices, ...adminFeeInvs].filter(i => i.status === 'paid').reduce((s, i) => s + (i.totalCents || i.feeCents || 0), 0)
+  const sessionOwed     = sessionInvoices.filter(i => i.status === 'finalized' || i.status === 'payment_failed').reduce((s, i) => s + (i.total_cents || 0), 0)
+  const sessionPaid     = sessionInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.total_cents || 0), 0)
+  const adminOwed       = adminFeeInvs.filter(f => ['sent', 'overdue'].includes(f.status)).reduce((s, f) => s + (f.feeCents || 0), 0)
+  const adminPaid       = adminFeeInvs.filter(f => f.status === 'paid').reduce((s, f) => s + (f.feeCents || 0), 0)
+  const totalOwed = sessionOwed + adminOwed
+  const totalPaid = sessionPaid + adminPaid
 
   const firstLast = (type) => {
     const m = {}
@@ -119,7 +125,7 @@ export default function EmployerPortalView({ employerId }) {
             <table style={{ width:'100%', borderCollapse:'collapse' }}>
               <thead>
                 <tr style={{ background:C.cream }}>
-                  {[['Period'], ['Amount', true], ['Status'], ['Due Date']].map(([h, r], i) => (
+                  {[['Period'], ['Amount', true], ['Status'], ['Due Date'], ['']].map(([h, r], i) => (
                     <th key={i} style={{ ...TH, textAlign: r ? 'right' : 'left' }}>{h}</th>
                   ))}
                 </tr>
@@ -127,12 +133,22 @@ export default function EmployerPortalView({ employerId }) {
               <tbody>
                 {sessionInvoices.map((inv, i) => (
                   <tr key={inv.id} style={{ background: i % 2 === 1 ? C.bgPage : C.white, borderBottom:`1px solid ${C.border}` }}>
-                    <td style={{ ...TD(false), fontFamily:'monospace' }}>{inv.period}</td>
-                    <td style={{ ...TD(true),  fontFamily:'monospace', fontWeight:700, color:C.tealDark }}>{fmt(inv.totalCents)}</td>
+                    <td style={{ ...TD(false), fontFamily:'monospace' }}>{monthLabel(inv.period_start)}</td>
+                    <td style={{ ...TD(true),  fontFamily:'monospace', fontWeight:700, color:C.tealDark }}>{fmt(inv.total_cents || 0)}</td>
                     <td style={TD(false)}><Badge status={inv.status}/></td>
-                    <td style={{ ...TD(false), color:C.textMid, fontSize:12 }}>—</td>
+                    <td style={{ ...TD(false), color:C.textMid, fontSize:12, fontFamily:'monospace' }}>{inv.due_date ? inv.due_date.slice(0, 10) : '—'}</td>
+                    <td style={{ ...TD(true), fontSize:11 }}>
+                      {inv.hosted_invoice_url && (
+                        <a href={inv.hosted_invoice_url} target="_blank" rel="noopener noreferrer" style={{ color:C.teal, textDecoration:'underline' }}>
+                          View invoice ↗
+                        </a>
+                      )}
+                    </td>
                   </tr>
                 ))}
+                {sessionInvoices.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding:'12px', fontSize:12, color:C.textMid, fontStyle:'italic' }}>No session invoices yet.</td></tr>
+                )}
               </tbody>
             </table>
           </div>

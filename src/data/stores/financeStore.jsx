@@ -105,10 +105,13 @@ export function FinanceStoreProvider({ children }) {
     await ensureLoaded({ force: true })
   }
 
-  const updateInvoiceStatus = async ({ id, status }) => {
-    if (status === 'sent') await api.invoices.send(id)
-    else if (status === 'paid') await api.invoices.markPaid(id)
-    await ensureLoaded({ force: true })
+  const getInvoice = (id) => api.invoices.get(id)
+
+  const runInvoicing = async ({ forDate } = {}) => {
+    const body = forDate ? { for_date: forDate } : {}
+    const report = await api.invoices.run(body)
+    await ensureSummaryLoaded({ force: true })
+    return report
   }
 
   const updatePayoutStatus = async ({ id, status }) => {
@@ -129,7 +132,8 @@ export function FinanceStoreProvider({ children }) {
     ensureAdminFeesLoaded,
     addAdminFee,
     updateAdminFee,
-    updateInvoiceStatus,
+    getInvoice,
+    runInvoicing,
     updatePayoutStatus,
   }), [invoices, adminFees, payouts, loading, summaryLoaded, adminFeesLoaded])
 

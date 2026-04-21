@@ -216,10 +216,9 @@ export const api = {
 
   // ── Invoices ─────────────────────────────────────────────────────────────────
   invoices: {
-    list:          (filters)            => request('GET',  `/invoices?${new URLSearchParams(filters || {})}`),
-    generate:      (period)             => request('POST', '/invoices/generate', { period }),
-    send:          (id)                 => request('PUT',  `/invoices/${id}/send`),
-    markPaid:      (id)                 => request('PUT',  `/invoices/${id}/mark-paid`),
+    list:          (query)              => request('GET',  withQuery('/invoices', query)),
+    get:           (id)                 => request('GET',  `/invoices/${id}`),
+    run:           (body)               => request('POST', '/invoices/run', body || {}),
   },
 
   // ── Admin Fees ────────────────────────────────────────────────────────────────

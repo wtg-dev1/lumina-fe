@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { C } from '../../utils/constants'
-import { fmt } from '../../utils/helpers'
+import { fmt, monthLabel } from '../../utils/helpers'
 import { useCareStore, useFinanceStore, useOrgStore } from '../../data/stores'
 import { SH, StatCard, Bar } from '../../components/ui'
 import { Badge } from '../../components/ui'
@@ -30,11 +30,13 @@ export default function DashboardView({ onNavigate = () => {} }) {
     finance.ensureAdminFeesLoaded({ employerIds: org.employers.map((e) => e.id) })
   }, [org.employers, finance.ensureAdminFeesLoaded])
 
-  const totalRev    = db.invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+i.totalCents,0)
-  const pendRev     = db.invoices.filter(i=>['sent','draft'].includes(i.status)).reduce((s,i)=>s+i.totalCents,0)
+  const now         = new Date()
+  const isOverdue   = (i) => i.status === 'payment_failed' || (i.status === 'finalized' && i.due_date && new Date(i.due_date) < now)
+  const totalRev    = db.invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total_cents||0),0)
+  const pendRev     = db.invoices.filter(i=>['finalized','draft'].includes(i.status)).reduce((s,i)=>s+(i.total_cents||0),0)
   const margin      = db.payouts.filter(p=>p.status==='paid').reduce((s,p)=>s+p.marginCents,0)
   const mtd         = db.sessions.filter(s=>s.date.startsWith('2026-03')).length
-  const overdue     = db.invoices.filter(i=>i.status==='overdue')
+  const overdue     = db.invoices.filter(isOverdue)
   const pendPay     = db.payouts.filter(p=>['pending','processing'].includes(p.status))
   const pendRef     = (db.referrals||[]).filter(r=>r.status==='pending').length
   const adminPaid   = (db.adminFees||[]).filter(f=>f.status==='paid').reduce((s,f)=>s+f.feeCents,0)
@@ -63,7 +65,7 @@ export default function DashboardView({ onNavigate = () => {} }) {
 
       {[...adminOverdue.map(f=>({ msg:<>⚠ Admin fee overdue — <strong>{db.employers.find(e=>e.id===f.employerId)?.name}</strong> · {f.periodLabel} · {fmt(f.feeCents)}</>, bg:'#FCE8E8',color:'#B03A3A',border:'#D9534F' })),
         ...adminSent.map(f=>({ msg:<>💰 Admin fee awaiting payment — <strong>{db.employers.find(e=>e.id===f.employerId)?.name}</strong> · {f.periodLabel} · {fmt(f.feeCents)} · Due {f.dueDate}</>, bg:'#FFF3E0',color:'#8B5E00',border:'#F0A500' })),
-        ...overdue.map(inv=>({ msg:<>⚠ Session invoice overdue — <strong>{db.employers.find(e=>e.id===inv.employerId)?.name}</strong> · {inv.period} · {fmt(inv.totalCents)}</>, bg:'#FCE8E8',color:'#B03A3A',border:'#D9534F' })),
+        ...overdue.map(inv=>({ msg:<>⚠ Session invoice overdue — <strong>{db.employers.find(e=>e.id===inv.employer_id)?.name}</strong> · {monthLabel(inv.period_start)} · {fmt(inv.total_cents||0)}</>, bg:'#FCE8E8',color:'#B03A3A',border:'#D9534F' })),
         ...pendPay.map(pay=>({ msg:<>⏳ Payout {pay.status} — <strong>{db.practices.find(p=>p.id===pay.practiceId)?.name}</strong> · {pay.period} · {fmt(pay.netCents)}</>, bg:'#FFF3E0',color:'#8B5E00',border:'#F0A500' }))
       ].map((a,i)=>(
         <div key={i} style={{ background:a.bg, border:`1px solid ${a.border}`, borderRadius:4, padding:'10px 14px', fontSize:13, color:a.color, marginBottom:8 }}>{a.msg}</div>
@@ -105,8 +107,8 @@ export default function DashboardView({ onNavigate = () => {} }) {
           <thead><tr>{[['Employer'],['Billing'],['Sessions',true],['Revenue',true],['Latest Invoice']].map(([h,r],i)=><th key={i} style={{padding:'9px 14px',fontSize:10,fontWeight:700,color:C.textMid,textTransform:'uppercase',letterSpacing:'0.06em',borderBottom:`1px solid ${C.border}`,background:C.cream,whiteSpace:'nowrap',textAlign:r?'right':'left'}}>{h}</th>)}</tr></thead>
           <tbody>{db.employers.map(emp=>{
             const sessions = db.sessions.filter(s=>s.employerId===emp.id).length
-            const revenue  = db.invoices.filter(i=>i.employerId===emp.id&&i.status==='paid').reduce((s,i)=>s+i.totalCents,0)
-            const inv = db.invoices.filter(i=>i.employerId===emp.id).sort((a,b)=>b.period.localeCompare(a.period))[0]
+            const revenue  = db.invoices.filter(i=>i.employer_id===emp.id&&i.status==='paid').reduce((s,i)=>s+(i.total_cents||0),0)
+            const inv = db.invoices.filter(i=>i.employer_id===emp.id).sort((a,b)=>(b.period_start||'').localeCompare(a.period_start||''))[0]
             const td = (right=false) => ({ padding:'10px 14px', textAlign:right?'right':'left', color:C.textDark, borderBottom:`1px solid ${C.border}`, verticalAlign:'middle' })
             return <tr key={emp.id}>
               <td style={td()}><strong>{emp.name}</strong></td>
